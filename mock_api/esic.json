@@ -1,0 +1,40 @@
+{
+  "records": [
+    {
+      "pan": "AABCU9603R",
+      "esic_code": "11000123450000699",
+      "name": "Bharat Tech Solutions Private Limited",
+      "status": "Active",
+      "employees_covered": 86,
+      "last_contribution_month": "2026-07",
+      "compliance_status": "Compliant"
+    },
+    {
+      "pan": "AAACP1234A",
+      "esic_code": "31000987650000112",
+      "name": "Precision Components India LLP",
+      "status": "Active",
+      "employees_covered": 42,
+      "last_contribution_month": "2026-04",
+      "compliance_status": "Non-Compliant"
+    },
+    {
+      "pan": "AADCS1234B",
+      "esic_code": "53000554430000901",
+      "name": "South India Digital Services",
+      "status": "Active",
+      "employees_covered": 18,
+      "last_contribution_month": "2026-07",
+      "compliance_status": "Compliant"
+    },
+    {
+      "pan": "AABCW7788D",
+      "esic_code": "19000112230000445",
+      "name": "Eastern Fabricators Works",
+      "status": "Active",
+      "employees_covered": 55,
+      "last_contribution_month": "2026-07",
+      "compliance_status": "Compliant"
+    }
+  ]
+}

@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}GeM Bid Compliance Verification Platform{% endblock %}</title>
+    <!-- Tailwind CSS (CDN) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        gem: {
+                            navy: '#0f2942',
+                            blue: '#1d4ed8',
+                            orange: '#ea580c',
+                            gold: '#ca8a04',
+                            surface: '#f8fafc',
+                            border: '#e2e8f0'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+
+    <!-- Government of India / GeM Official Header Bar -->
+    <header class="bg-gem-navy text-white text-xs py-1 px-4 border-b border-slate-700 flex justify-between items-center">
+        <div class="flex items-center space-x-3">
+            <span class="font-semibold tracking-wider flex items-center">
+                <i class="fa-solid fa-landmark mr-1.5 text-amber-400"></i> GOVERNMENT OF INDIA • GeM PROCUREMENT VERIFICATION
+            </span>
+            <span class="bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded text-[10px] font-medium border border-amber-500/30">
+                PROTOTYPE / DEMO ENVIRONMENT
+            </span>
+        </div>
+        <div class="flex items-center space-x-4">
+            <span><i class="fa-regular fa-clock mr-1"></i> UTC Time: <span id="utc-clock">2026-09-05</span></span>
+            <a href="/report/1" class="hover:text-amber-300"><i class="fa-solid fa-file-pdf mr-1"></i> Sample Report</a>
+        </div>
+    </header>
+
+    <!-- Main Navigation Bar -->
+    <nav class="bg-white border-b border-slate-200 px-6 py-3 shadow-xs">
+        <div class="max-w-7xl mx-auto flex flex-wrap justify-between items-center gap-4">
+            <div class="flex items-center space-x-3">
+                <div class="bg-gem-navy text-white p-2 rounded-lg font-black text-lg tracking-tight">
+                    GeM<span class="text-amber-400">.</span>verify
+                </div>
+                <div>
+                    <h1 class="text-sm font-bold text-slate-900 leading-tight">AI-Powered Integrated Bid Compliance Platform</h1>
+                    <p class="text-xs text-slate-500">Statutory Cross-Validation & Deterministic Due Diligence</p>
+                </div>
+            </div>
+
+            <!-- Current Session Info -->
+            <div class="flex items-center space-x-3 text-xs">
+                {% if session.get('user_id') %}
+                    <div class="text-right">
+                        <div class="font-bold text-slate-800 flex items-center justify-end space-x-1.5">
+                            <span>{{ session.get('full_name') }}</span>
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider
+                                {% if session.get('role') == 'admin' %}bg-purple-100 text-purple-800 border border-purple-200
+                                {% elif session.get('role') == 'officer' %}bg-blue-100 text-gem-navy border border-blue-200
+                                {% else %}bg-emerald-100 text-emerald-800 border border-emerald-200{% endif %}">
+                                {{ session.get('role') }}
+                            </span>
+                        </div>
+                        <div class="text-slate-500 text-[11px]">{{ session.get('organization', 'GeM') }}</div>
+                    </div>
+                    <a href="/auth/logout" class="text-slate-500 hover:text-rose-600 p-2 rounded-lg hover:bg-rose-50 border border-slate-200 transition-colors" title="Sign Out">
+                        <i class="fa-solid fa-arrow-right-from-bracket"></i>
+                        <span class="sr-only">Sign Out</span>
+                    </a>
+                {% else %}
+                    <div class="flex items-center space-x-2">
+                        <a href="/login" class="bg-gem-navy hover:bg-slate-800 text-white px-3.5 py-1.5 rounded-lg font-semibold text-xs shadow-xs transition-colors flex items-center">
+                            <i class="fa-solid fa-arrow-right-to-bracket mr-1.5"></i> Sign In
+                        </a>
+                        <a href="/register" class="bg-white hover:bg-slate-50 text-gem-navy border border-gem-navy px-3.5 py-1.5 rounded-lg font-semibold text-xs transition-colors flex items-center">
+                            <i class="fa-solid fa-user-plus mr-1.5"></i> Register Bidder
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+
+    <!-- Sub Navigation Tabs based on Role -->
+    <div class="bg-slate-100 border-b border-slate-200 px-6 py-2 text-xs">
+        <div class="max-w-7xl mx-auto flex items-center justify-between">
+            <div class="flex items-center space-x-6">
+                {% if session.get('user_id') %}
+                    {% if session.get('role') == 'admin' %}
+                        <a href="/admin" class="text-gem-navy font-bold flex items-center hover:underline">
+                            <i class="fa-solid fa-shield-halved mr-1.5 text-gem-blue"></i> Admin Console
+                        </a>
+                        <a href="/admin/officers" class="text-slate-700 hover:text-gem-navy font-semibold flex items-center">
+                            <i class="fa-solid fa-user-tie mr-1.5 text-slate-400"></i> Manage Officers
+                        </a>
+                        <a href="/admin/assignments" class="text-slate-700 hover:text-gem-navy font-semibold flex items-center">
+                            <i class="fa-solid fa-clipboard-user mr-1.5 text-slate-400"></i> Tender Assignments
+                        </a>
+                        <a href="/officer/tenders" class="text-slate-700 hover:text-gem-navy font-semibold flex items-center">
+                            <i class="fa-solid fa-folder-tree mr-1.5 text-slate-400"></i> All Tenders
+                        </a>
+                        <a href="/admin/api-status" class="text-slate-700 hover:text-gem-navy font-semibold flex items-center">
+                            <i class="fa-solid fa-network-wired mr-1.5 text-slate-400"></i> API Status
+                        </a>
+                        <a href="/admin/audit" class="text-slate-700 hover:text-gem-navy font-semibold flex items-center">
+                            <i class="fa-solid fa-timeline mr-1.5 text-slate-400"></i> Audit Trail
+                        </a>
+                    {% elif session.get('role') == 'officer' %}
+                        <a href="/officer/tenders" class="text-gem-navy font-bold flex items-center">
+                            <i class="fa-solid fa-list-check mr-1.5 text-gem-blue"></i> Assigned Tenders Queue
+                        </a>
+                    {% elif session.get('role') == 'bidder' %}
+                        <a href="/bidder" class="text-gem-navy font-bold flex items-center">
+                            <i class="fa-solid fa-building-circle-check mr-1.5 text-emerald-600"></i> Bidder Dashboard
+                        </a>
+                    {% endif %}
+                {% else %}
+                    <span class="text-slate-600 font-medium flex items-center">
+                        <i class="fa-solid fa-shield-halved mr-1.5 text-gem-navy"></i> National Public Procurement Portal • AI-Powered Bid Compliance Verification Engine
+                    </span>
+                {% endif %}
+            </div>
+            <div class="hidden sm:flex items-center space-x-2 text-slate-500 text-[11px]">
+                <i class="fa-solid fa-circle-check text-emerald-500"></i> Deterministic Engine Ready • Server Port 3000
+            </div>
+        </div>
+    </div>
+
+    <!-- Flash Messages Container -->
+    <main class="flex-grow max-w-7xl w-full mx-auto p-6">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="mb-6 space-y-2">
+                    {% for category, msg in messages %}
+                        <div class="p-3 rounded-lg text-sm border flex items-center justify-between
+                            {% if category == 'success' %}bg-emerald-50 border-emerald-200 text-emerald-800
+                            {% elif category == 'danger' %}bg-rose-50 border-rose-200 text-rose-800
+                            {% elif category == 'warning' %}bg-amber-50 border-amber-200 text-amber-800
+                            {% else %}bg-blue-50 border-blue-200 text-blue-800{% endif %}">
+                            <div class="flex items-center">
+                                <i class="fa-solid 
+                                    {% if category == 'success' %}fa-circle-check text-emerald-500
+                                    {% elif category == 'danger' %}fa-circle-exclamation text-rose-500
+                                    {% elif category == 'warning' %}fa-triangle-exclamation text-amber-500
+                                    {% else %}fa-circle-info text-blue-500{% endif %} mr-2"></i>
+                                <span>{{ msg }}</span>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-slate-200 py-4 px-6 text-xs text-slate-500">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-2">
+            <div>
+                © 2026 GeM Bid Compliance Verification Platform • SIH Smart Procurement Prototype
+            </div>
+            <div class="flex items-center space-x-4">
+                <span class="text-slate-400">Disclaimer: Verification outputs are assistive; final procurement award decisions remain with the designated Procurement Officer.</span>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Update UTC clock in header
+        function updateClock() {
+            const now = new Date();
+            const utcString = now.toUTCString();
+            const clockEl = document.getElementById('utc-clock');
+            if (clockEl) {
+                clockEl.textContent = utcString;
+            }
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+    </script>
+</body>
+</html>

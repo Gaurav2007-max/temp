@@ -1,0 +1,89 @@
+<%- include('partials/header', { title: 'Bidder Dashboard · GeM Compliance' }) %>
+
+<section class="page-hero" id="bidderHero">
+  <div class="container">
+    <p class="eyebrow">Bidder workspace</p>
+    <h1>My submissions</h1>
+    <p>Track document compliance verification and procurement officer decisions.</p>
+  </div>
+</section>
+
+<section class="section" id="bidderSubmissions">
+  <div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h2 class="h5 mb-0">Verification history</h2>
+      <a class="btn btn-primary" href="/upload" id="submitDocBtn">Submit compliance document</a>
+    </div>
+    <div class="table-responsive panel">
+      <table class="table align-middle mb-0" id="submissionsTable">
+        <thead>
+          <tr>
+            <th>S.No.</th>
+            <th>Submission ID</th>
+            <th>Company Name</th>
+            <th>Tender ID / Title</th>
+            <th>Compliance Score</th>
+            <th>Risk Level</th>
+            <th>Officer Decision</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if (submissions && submissions.length > 0) { %>
+            <% submissions.forEach(function(item, index) { %>
+              <tr>
+                <td><%= index + 1 %></td>
+                <td>
+                  <span class="id-badge">BID-<%= String(item.id).padStart(5, '0') %></span>
+                  <div class="small text-secondary">v<%= item.verification_version || 1 %></div>
+                </td>
+                <td>
+                  <div class="fw-semibold"><%= item.legal_name %></div>
+                  <div class="small text-secondary">GSTIN: <%= item.gstin || '—' %></div>
+                </td>
+                <td>
+                  <span class="id-badge">TND-<%= String(item.tender_id).padStart(5, '0') %></span><br>
+                  <span class="small fw-semibold"><%= item.title %></span>
+                </td>
+                <td>
+                  <% if (item.compliance_score !== null && item.compliance_score !== undefined) { %>
+                    <span class="score-pill"><%= item.compliance_score %></span>
+                  <% } else { %>
+                    <span class="text-secondary">Pending</span>
+                  <% } %>
+                </td>
+                <td>
+                  <% if (item.risk_level) { %>
+                    <span class="risk-badge risk-<%= item.risk_level.toLowerCase() %>"><%= item.risk_level %></span>
+                  <% } else { %>
+                    <span class="text-secondary">Pending</span>
+                  <% } %>
+                </td>
+                <td>
+                  <% if (item.officer_decision === 'Qualified') { %>
+                    <span class="badge bg-success">Qualified</span>
+                  <% } else if (item.officer_decision === 'Disqualified') { %>
+                    <span class="badge bg-danger">Disqualified</span>
+                  <% } else if (item.officer_decision === 'Seek Clarification') { %>
+                    <span class="badge bg-warning text-dark">Clarification Required</span>
+                  <% } else { %>
+                    <span class="badge bg-secondary"><%= item.officer_decision || 'Pending' %></span>
+                  <% } %>
+                </td>
+                <td>
+                  <a class="btn btn-sm btn-outline-primary" href="/bidder/<%= item.id %>">View Details</a>
+                </td>
+              </tr>
+            <% }); %>
+          <% } else { %>
+            <tr>
+              <td colspan="8" class="text-center text-secondary py-4">No submissions yet. Click "Submit compliance document" to start.</td>
+            </tr>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<%- include('partials/footer') %>

@@ -1,0 +1,225 @@
+<%- include('partials/header', { title: 'Compliance Dashboard · GeM Compliance' }) %>
+
+<section class="page-hero" id="officerHero">
+  <div class="container">
+    <p class="eyebrow">Procurement Officer Workspace</p>
+    <h1>Compliance dashboard</h1>
+    <p>Centralized verification status, risk distribution, and officer decisions.</p>
+  </div>
+</section>
+
+<section class="section" id="officerDashboard">
+  <div class="container">
+    <div class="row g-4 mb-4">
+      <div class="col-md-4">
+        <div class="panel text-center h-100 d-flex flex-column justify-content-center align-items-center" id="riskChartPanel">
+          <h2 class="h6 text-secondary mb-3">Risk Distribution</h2>
+          <div style="position: relative; width: 160px; height: 160px; margin: 0 auto;">
+            <svg viewBox="0 0 36 36" class="circular-chart" style="max-width: 100%; max-height: 100%;">
+              <path class="circle-bg"
+                d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                fill="none" stroke="#e8e1d4" stroke-width="3.8" />
+              <% 
+                const totalRisk = (risk_counts.Low || 0) + (risk_counts.Medium || 0) + (risk_counts.High || 0) || 1;
+                const lowPct = Math.round(((risk_counts.Low || 0) / totalRisk) * 100);
+                const medPct = Math.round(((risk_counts.Medium || 0) / totalRisk) * 100);
+                const highPct = Math.round(((risk_counts.High || 0) / totalRisk) * 100);
+              %>
+              <path class="circle"
+                stroke-dasharray="<%= lowPct %>, 100"
+                d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                fill="none" stroke="#0b6e4f" stroke-width="3.8" />
+              <path class="circle"
+                stroke-dasharray="<%= medPct %>, 100"
+                stroke-dashoffset="-<%= lowPct %>"
+                d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                fill="none" stroke="#c47a0a" stroke-width="3.8" />
+              <path class="circle"
+                stroke-dasharray="<%= highPct %>, 100"
+                stroke-dashoffset="-<%= lowPct + medPct %>"
+                d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                fill="none" stroke="#9b2226" stroke-width="3.8" />
+            </svg>
+            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center;">
+              <strong style="font-size: 1.25rem;"><%= bidders ? bidders.length : 0 %></strong>
+              <div class="small text-secondary" style="font-size: 0.7rem;">Submissions</div>
+            </div>
+          </div>
+          <div class="d-flex justify-content-center gap-3 mt-3 small">
+            <span class="text-success fw-bold">● Low: <%= risk_counts.Low || 0 %></span>
+            <span class="text-warning fw-bold">● Med: <%= risk_counts.Medium || 0 %></span>
+            <span class="text-danger fw-bold">● High: <%= risk_counts.High || 0 %></span>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-8">
+        <div class="row g-3">
+          <div class="col-6 col-lg-4">
+            <div class="stat compact">
+              <div class="stat-value text-success"><%= risk_counts.Low || 0 %></div>
+              <div class="stat-label">Low risk</div>
+            </div>
+          </div>
+          <div class="col-6 col-lg-4">
+            <div class="stat compact">
+              <div class="stat-value text-warning"><%= risk_counts.Medium || 0 %></div>
+              <div class="stat-label">Medium risk</div>
+            </div>
+          </div>
+          <div class="col-6 col-lg-4">
+            <div class="stat compact">
+              <div class="stat-value text-danger"><%= risk_counts.High || 0 %></div>
+              <div class="stat-label">High risk</div>
+            </div>
+          </div>
+          <div class="col-6 col-lg-4">
+            <div class="stat compact">
+              <div class="stat-value"><%= decision_counts.Pending || 0 %></div>
+              <div class="stat-label">Pending decision</div>
+            </div>
+          </div>
+          <div class="col-6 col-lg-4">
+            <div class="stat compact">
+              <div class="stat-value text-success"><%= decision_counts.Qualified || 0 %></div>
+              <div class="stat-label">Qualified</div>
+            </div>
+          </div>
+          <div class="col-6 col-lg-4">
+            <div class="stat compact">
+              <div class="stat-value text-danger"><%= decision_counts.Disqualified || 0 %></div>
+              <div class="stat-label">Disqualified</div>
+            </div>
+          </div>
+          <div class="col-12 mt-3">
+            <a href="/upload" class="btn btn-primary" id="verifyBidderBtn">Verify another bidder document</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <% if (assigned_tenders && assigned_tenders.length > 0) { %>
+      <div class="panel mb-4" id="assignedTendersPanel">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h2 class="h5 mb-0">Assigned tenders</h2>
+          <span class="small text-secondary">Authorized procurement jurisdiction</span>
+        </div>
+        <div class="row g-3">
+          <% assigned_tenders.forEach(function(tender) { %>
+            <div class="col-lg-6">
+              <div class="border rounded p-3 h-100 bg-light">
+                <div class="d-flex justify-content-between gap-2">
+                  <div>
+                    <a class="fw-semibold text-dark" href="/tenders/<%= tender.id %>">
+                      TND-<%= String(tender.id).padStart(5, '0') %> · <%= tender.title %>
+                    </a>
+                    <div class="small text-secondary"><%= tender.gem_bid_id %> · v<%= tender.tender_version || '1' %></div>
+                  </div>
+                  <span class="badge bg-primary align-self-start"><%= tender.stage || 'OPEN_FOR_BIDDING' %></span>
+                </div>
+                <div class="row g-2 small mt-2">
+                  <div class="col-4">Bidders<strong class="d-block"><%= tender.bidder_count || 0 %></strong></div>
+                  <div class="col-4">Pending<strong class="d-block"><%= tender.pending_count || 0 %></strong></div>
+                  <div class="col-4">Qualified<strong class="d-block text-success"><%= tender.qualified_count || 0 %></strong></div>
+                </div>
+              </div>
+            </div>
+          <% }); %>
+        </div>
+      </div>
+    <% } %>
+
+    <div class="table-responsive panel" id="biddersTablePanel">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 class="h5 mb-0">Bidder Review Queue</h2>
+        <span class="badge bg-light text-dark border">Decision-support active</span>
+      </div>
+      <table class="table align-middle mb-0" id="bidderTable">
+        <thead>
+          <tr>
+            <th>S.No.</th>
+            <th>Bidder ID</th>
+            <th>Bidder Name</th>
+            <th>Tender / GeM Bid</th>
+            <th>PAN / GSTIN</th>
+            <th>Score</th>
+            <th>Risk</th>
+            <th>AI Recommendation</th>
+            <th>Workflow</th>
+            <th>Officer Decision</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if (bidders && bidders.length > 0) { %>
+            <% bidders.forEach(function(b, index) { %>
+              <% const r = results[b.id]; %>
+              <% const t = tenders[b.tender_id]; %>
+              <tr>
+                <td><%= index + 1 %></td>
+                <td>
+                  <span class="id-badge">BID-<%= String(b.id).padStart(5, '0') %></span>
+                  <div class="small text-secondary">v<%= r ? r.verification_version : 1 %></div>
+                </td>
+                <td>
+                  <div class="fw-semibold"><%= b.legal_name %></div>
+                  <div class="small text-secondary"><%= b.trade_name || '' %></div>
+                </td>
+                <td class="small">
+                  <% if (t) { %>
+                    <a href="/tenders/<%= t.id %>"><span class="id-badge">TND-<%= String(t.id).padStart(5, '0') %></span></a><br>
+                    <code><%= t.gem_bid_id %></code><br>
+                    <span class="text-secondary"><%= t.title %></span>
+                  <% } else { %>—<% } %>
+                </td>
+                <td class="small">
+                  <code><%= b.pan %></code><br />
+                  <code><%= b.gstin %></code>
+                </td>
+                <td>
+                  <% if (r) { %>
+                    <span class="score-pill"><%= r.compliance_score %></span>
+                  <% } else { %>—<% } %>
+                </td>
+                <td>
+                  <% if (r) { %>
+                    <span class="risk-badge risk-<%= (r.risk_level || 'unknown').toLowerCase() %>"><%= r.risk_level %></span>
+                  <% } else { %>—<% } %>
+                </td>
+                <td class="small"><%= r ? r.recommendation : '—' %></td>
+                <td class="small">
+                  <%= r ? r.workflow_state : '—' %>
+                  <% if (r && r.needs_reevaluation) { %>
+                    <br><span class="badge bg-warning text-dark">Re-evaluate</span>
+                  <% } %>
+                </td>
+                <td>
+                  <% if (r && r.officer_decision === 'Qualified') { %>
+                    <span class="badge bg-success">Qualified</span>
+                  <% } else if (r && r.officer_decision === 'Disqualified') { %>
+                    <span class="badge bg-danger">Disqualified</span>
+                  <% } else if (r && r.officer_decision === 'Seek Clarification') { %>
+                    <span class="badge bg-warning text-dark">Clarification</span>
+                  <% } else { %>
+                    <span class="badge bg-secondary"><%= r ? r.officer_decision : 'Pending' %></span>
+                  <% } %>
+                </td>
+                <td class="text-nowrap">
+                  <a class="btn btn-sm btn-outline-primary py-0 px-2" href="/bidder/<%= b.id %>">Review</a>
+                  <% if (r) { %>
+                    <a class="btn btn-sm btn-outline-secondary py-0 px-2 ms-1" href="/report/<%= b.id %>">Report</a>
+                  <% } %>
+                </td>
+              </tr>
+            <% }); %>
+          <% } else { %>
+            <tr>
+              <td colspan="11" class="text-center text-secondary py-4">No bidders submitted yet.</td>
+            </tr>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<%- include('partials/footer') %>

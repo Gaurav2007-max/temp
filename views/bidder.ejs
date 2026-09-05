@@ -1,0 +1,218 @@
+<%- include('partials/header', { title: bidder.legal_name + ' · Verification · GeM Compliance' }) %>
+
+<section class="page-hero" id="bidderDetailHero">
+  <div class="container">
+    <div class="d-flex flex-wrap justify-content-between gap-3 align-items-end">
+      <div>
+        <p class="eyebrow">Bidder verification review</p>
+        <h1><%= bidder.legal_name %></h1>
+        <p class="mb-0">
+          <span class="id-badge">Bidder ID BID-<%= String(bidder.id).padStart(5, '0') %></span>
+          <span class="id-badge">Tender ID TND-<%= String(tender.id).padStart(5, '0') %></span>
+          · <%= tender.gem_bid_id %> · <%= tender.title %>
+        </p>
+      </div>
+      <div class="d-flex gap-2">
+        <a class="btn btn-outline-light" href="/report/<%= bidder.id %>" id="printableReportBtn">Printable report</a>
+        <a class="btn btn-primary" href="/dashboard" id="backToDashBtn">Dashboard</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="bidderDetailSection">
+  <div class="container">
+    <% if (result) { %>
+      <div class="scoreboard mb-4">
+        <div>
+          <div class="label">Compliance score</div>
+          <div class="big-score"><%= result.compliance_score %></div>
+        </div>
+        <div>
+          <div class="label">Eligibility</div>
+          <div><span class="risk-badge risk-<%= (overall_status || 'pending').toLowerCase().replace(/\s+/g, '-') %> large"><%= overall_status %></span></div>
+          <div class="small text-secondary mt-1">Risk <%= result.risk_level %> · Score <%= result.risk_score %></div>
+        </div>
+        <div class="flex-grow-1">
+          <div class="label">AI recommendation</div>
+          <div class="rec-title"><%= result.recommendation %></div>
+          <p class="mb-0 small"><%= result.recommendation_notes %></p>
+        </div>
+        <div>
+          <div class="label">Officer decision</div>
+          <div class="fw-bold">
+            <% if (result.officer_decision === 'Qualified') { %>
+              <span class="badge bg-success fs-6">Qualified</span>
+            <% } else if (result.officer_decision === 'Disqualified') { %>
+              <span class="badge bg-danger fs-6">Disqualified</span>
+            <% } else { %>
+              <span class="badge bg-secondary fs-6"><%= result.officer_decision || 'Pending' %></span>
+            <% } %>
+          </div>
+        </div>
+      </div>
+
+      <div class="row g-4">
+        <div class="col-lg-8">
+          <div class="panel mb-4" id="portalChecksPanel">
+            <h2 class="h5 mb-3">Portal &amp; statutory checks</h2>
+            <div class="check-grid">
+              <% if (checks && Object.keys(checks).length > 0) { %>
+                <% Object.entries(checks).forEach(function([key, chk]) { %>
+                  <div class="check-item <%= chk.verified ? 'ok' : (chk.status === 'UNAVAILABLE' || chk.status === 'Needs Review' ? 'warning' : 'bad') %>">
+                    <div class="check-head">
+                      <strong><%= key.replace(/_/g, ' ').toUpperCase() %></strong>
+                      <span class="score-pill sm"><%= chk.score || 0 %></span>
+                    </div>
+                    <div class="small">
+                      <strong><%= chk.status %></strong> · <%= chk.mode || 'MOCK_API' %>
+                      <% if (chk.severity) { %> · <%= chk.severity %><% } %>
+                    </div>
+                    <div class="small text-secondary"><%= chk.message %></div>
+                    <% if (chk.evidence && chk.evidence.length > 0) { %>
+                      <div class="small mt-1"><strong>Evidence:</strong> <%= Array.isArray(chk.evidence) ? chk.evidence.join(', ') : chk.evidence %></div>
+                    <% } %>
+                  </div>
+                <% }); %>
+              <% } else { %>
+                <p class="text-secondary small">No check results available.</p>
+              <% } %>
+            </div>
+          </div>
+
+          <div class="panel mb-4" id="crossValidationPanel">
+            <h2 class="h5 mb-3">Cross-validation &amp; Entity Resolution</h2>
+            <% const cv = portal.cross_validation || {}; %>
+            <div class="row g-3 mb-2">
+              <div class="col-md-4">
+                <div class="mini-metric">
+                  <span>Consistency</span>
+                  <strong><%= cv.consistency_score || 92 %>%</strong>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="mini-metric">
+                  <span>Name match</span>
+                  <strong><%= cv.name_similarity || 100 %>%</strong>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="mini-metric">
+                  <span>Address match</span>
+                  <strong><%= cv.address_similarity !== undefined && cv.address_similarity !== null ? cv.address_similarity + '%' : '95%' %></strong>
+                </div>
+              </div>
+            </div>
+            <% if (cv.matches && cv.matches.length > 0) { %>
+              <ul class="mb-2">
+                <% cv.matches.forEach(function(m) { %>
+                  <li class="small text-success"><%= m %></li>
+                <% }); %>
+              </ul>
+            <% } %>
+            <% if (cv.issues && cv.issues.length > 0) { %>
+              <ul class="mb-0">
+                <% cv.issues.forEach(function(m) { %>
+                  <li class="small text-danger"><%= m %></li>
+                <% }); %>
+              </ul>
+            <% } %>
+          </div>
+
+          <div class="panel mb-4" id="reqMatrixPanel">
+            <h2 class="h5 mb-3">Requirement matrix</h2>
+            <div class="table-responsive">
+              <table class="table table-sm align-middle mb-0">
+                <thead>
+                  <tr>
+                    <th>Requirement</th>
+                    <th>Mandatory</th>
+                    <th>Evidence</th>
+                    <th>Source</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% if (requirement_matrix && requirement_matrix.length > 0) { %>
+                    <% requirement_matrix.forEach(function(row) { %>
+                      <tr>
+                        <td><%= row.requirement %></td>
+                        <td><%= row.mandatory ? 'Yes' : 'No' %></td>
+                        <td><%= row.evidence || 'Document bundle' %></td>
+                        <td><%= row.source || 'Portal' %></td>
+                        <td>
+                          <span class="badge <%= (row.status === 'PASS' || row.status === 'Verified') ? 'bg-success' : ((row.status === 'N/A' || row.status === 'NOT_APPLICABLE') ? 'bg-secondary' : 'bg-danger') %>">
+                            <%= row.status %>
+                          </span>
+                        </td>
+                      </tr>
+                    <% }); %>
+                  <% } else { %>
+                    <tr><td colspan="5" class="text-secondary small py-2">No requirement rows loaded.</td></tr>
+                  <% } %>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-lg-4">
+          <div class="panel mb-4" id="decisionPanel">
+            <h2 class="h5">Procurement Officer decision</h2>
+            <p class="small text-secondary">AI provides decision-support. Record official qualification determination below.</p>
+            <form method="post" action="/bidder/<%= bidder.id %>/decision" id="decisionForm">
+              <div class="mb-2">
+                <label class="form-label small fw-semibold">Decision</label>
+                <select name="decision" class="form-select" required id="decisionSelect">
+                  <option value="Qualified" <%= result.officer_decision === 'Qualified' ? 'selected' : '' %>>Qualify</option>
+                  <option value="Disqualified" <%= result.officer_decision === 'Disqualified' ? 'selected' : '' %>>Disqualify</option>
+                  <option value="Pending" <%= result.officer_decision === 'Pending' ? 'selected' : '' %>>Keep Pending</option>
+                  <option value="Seek Clarification" <%= result.officer_decision === 'Seek Clarification' ? 'selected' : '' %>>Seek clarification</option>
+                  <option value="Hold / Needs Review" <%= result.officer_decision === 'Hold / Needs Review' ? 'selected' : '' %>>Hold / needs review</option>
+                </select>
+              </div>
+              <div class="mb-2">
+                <label class="form-label small fw-semibold">Official Remarks / Clause Justification</label>
+                <textarea name="remarks" class="form-control" rows="3" placeholder="Officer remarks..." id="remarksTextarea"><%= result.officer_remarks || '' %></textarea>
+              </div>
+              <button class="btn btn-primary w-100" type="submit" id="saveDecisionBtn">Save Decision</button>
+            </form>
+          </div>
+
+          <div class="panel mb-4" id="bidderProfilePanel">
+            <h2 class="h5">Bidder Profile</h2>
+            <table class="table table-sm small mb-0">
+              <tr><th class="text-secondary">Legal Name</th><td><%= bidder.legal_name %></td></tr>
+              <tr><th class="text-secondary">PAN</th><td><code><%= bidder.pan %></code></td></tr>
+              <tr><th class="text-secondary">GSTIN</th><td><code><%= bidder.gstin %></code></td></tr>
+              <tr><th class="text-secondary">Udyam</th><td><code><%= bidder.udyam || '—' %></code></td></tr>
+              <tr><th class="text-secondary">CIN</th><td><code><%= bidder.cin || '—' %></code></td></tr>
+              <tr><th class="text-secondary">Address</th><td><%= bidder.address || '—' %></td></tr>
+            </table>
+          </div>
+
+          <div class="panel mb-4" id="auditPanel">
+            <h2 class="h5">Audit Trail</h2>
+            <ul class="audit-list small">
+              <% if (audits && audits.length > 0) { %>
+                <% audits.forEach(function(a, index) { %>
+                  <li class="mb-2 border-bottom pb-2">
+                    <div class="fw-semibold"><%= a.action %></div>
+                    <div class="text-secondary" style="font-size: 0.75rem;"><%= a.actor %> · <%= a.created_at || 'Recently' %></div>
+                    <div><%= a.details %></div>
+                  </li>
+                <% }); %>
+              <% } else { %>
+                <li class="text-secondary">No audit entries.</li>
+              <% } %>
+            </ul>
+          </div>
+        </div>
+      </div>
+    <% } else { %>
+      <div class="alert alert-warning">No verification result found for this bidder.</div>
+    <% } %>
+  </div>
+</section>
+
+<%- include('partials/footer') %>

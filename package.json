@@ -1,0 +1,11 @@
+{
+  "name": "gem-compliance-verify",
+  "version": "1.0.0",
+  "description": "AI-Powered Integrated Bid Compliance Verification Platform for GeM Procurement",
+  "scripts": {
+    "dev": "python3 app.py",
+    "build": "echo 'Build complete'",
+    "start": "python3 app.py",
+    "test": "pytest"
+  }
+}

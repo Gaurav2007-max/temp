@@ -1,0 +1,87 @@
+<%- include('partials/header', { title: 'Import GeM Tender · GeM Compliance' }) %>
+
+<section class="page-hero" id="importTenderHero">
+  <div class="container">
+    <p class="eyebrow">Tender Lifecycle</p>
+    <h1>Import GeM tender</h1>
+    <p>Fetch specifications and mandatory eligibility clauses directly from GeM or create custom tender criteria.</p>
+  </div>
+</section>
+
+<section class="section" id="importTenderSection">
+  <div class="container">
+    <div class="row g-4">
+      <div class="col-lg-7">
+        <form method="post" action="/tenders/import-gem" class="panel form-panel" id="importForm">
+          <h2 class="h5 mb-3">Tender Specification</h2>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">GeM Bid ID *</label>
+            <input type="text" name="gem_bid_id" class="form-control" placeholder="e.g. GEM/2026/B/9988771" value="GEM/2026/B/<%= Math.floor(1000000 + Math.random() * 9000000) %>" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Tender Title *</label>
+            <input type="text" name="title" class="form-control" placeholder="e.g. Supply of Unified Communications & Fiber Optic Terminals" required>
+          </div>
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Procuring Organization</label>
+              <input type="text" name="organization" class="form-control" placeholder="e.g. Ministry of Communications" value="Ministry of Communications">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Category</label>
+              <select name="category" class="form-select">
+                <option value="Network Equipment">Network Equipment</option>
+                <option value="IT Hardware" selected>IT Hardware</option>
+                <option value="Electronics & IoT">Electronics &amp; IoT</option>
+                <option value="Goods">General Goods</option>
+                <option value="Services">Services</option>
+              </select>
+            </div>
+          </div>
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Estimated Value (INR)</label>
+              <input type="number" name="estimated_value" class="form-control" value="35000000">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Min Local Content (%)</label>
+              <input type="number" name="min_local_content" class="form-control" value="50" min="0" max="100">
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Mandatory Compliance Rules</label>
+            <div class="d-flex flex-wrap gap-3">
+              <label class="form-check-label"><input type="checkbox" name="require_pan" value="1" checked class="form-check-input"> PAN Verification</label>
+              <label class="form-check-label"><input type="checkbox" name="require_gst" value="1" checked class="form-check-input"> Active GSTIN</label>
+              <label class="form-check-label"><input type="checkbox" name="require_oem" value="1" checked class="form-check-input"> OEM Authorization</label>
+              <label class="form-check-label"><input type="checkbox" name="require_bis" value="1" checked class="form-check-input"> BIS License</label>
+              <label class="form-check-label"><input type="checkbox" name="require_blacklist" value="1" checked class="form-check-input"> Debarment Check</label>
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary" id="submitImportBtn">Publish Tender Specification</button>
+        </form>
+      </div>
+
+      <div class="col-lg-5">
+        <div class="panel side-panel h-100">
+          <h2 class="h5">Quick Mock GeM Sync</h2>
+          <p class="small text-secondary">
+            In standard mode, tenders are imported directly via the GeM API gateway with all technical specifications and criteria automatically mapped into the compliance rule engine.
+          </p>
+          <div class="alert alert-light border small">
+            <strong>Sample GeM Record from Gateway:</strong>
+            <ul class="mb-0 mt-2 ps-3">
+              <li>Bid ID: GEM/2026/B/1234567</li>
+              <li>Estimated: ₹2.50 Cr</li>
+              <li>Required: GST, PAN, OEM, BIS, 50% Local Content</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<%- include('partials/footer') %>

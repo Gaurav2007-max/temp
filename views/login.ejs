@@ -1,0 +1,63 @@
+<%- include('partials/header', { title: (role.charAt(0).toUpperCase() + role.slice(1)) + ' Login · GeM Compliance' }) %>
+
+<section class="page-hero" id="loginHero">
+  <div class="container">
+    <p class="eyebrow">Secure access</p>
+    <h1><%= role.charAt(0).toUpperCase() + role.slice(1) %> login</h1>
+    <p>Sign in to access the <%= role %> workspace.</p>
+  </div>
+</section>
+
+<section class="section" id="loginSection">
+  <div class="container">
+    <div class="panel form-panel" style="max-width: 480px; margin: auto;">
+      <form method="post" action="/login/<%= role %>" id="loginForm">
+        <% if (role === 'bidder') { %>
+          <div class="mb-3">
+            <label class="form-label" for="usernameInput">Registered email</label>
+            <input class="form-control" id="usernameInput" name="username" type="email" required autocomplete="username" value="compliance@bharattech.example">
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="passwordInput">Password</label>
+            <input class="form-control" id="passwordInput" name="password" type="password" required autocomplete="current-password" value="bidder123">
+          </div>
+          <button class="btn btn-primary w-100" type="submit" id="submitLoginBtn">Sign in as Bidder</button>
+          <p class="small mt-3 mb-0">New bidder? <a href="/bidder/register">Create an account</a></p>
+        <% } else if (role === 'officer') { %>
+          <div class="mb-3">
+            <label class="form-label" for="usernameInput">Officer Email / Username</label>
+            <input class="form-control" id="usernameInput" name="username" required autocomplete="username" value="officer@gem.gov.in">
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="passwordInput">Password</label>
+            <input class="form-control" id="passwordInput" name="password" type="password" required autocomplete="current-password" value="officer123">
+          </div>
+          <button class="btn btn-primary w-100" type="submit" id="submitLoginBtn">Sign in as Procurement Officer</button>
+        <% } else { %>
+          <div class="mb-3">
+            <label class="form-label" for="usernameInput">Administrator Username</label>
+            <input class="form-control" id="usernameInput" name="username" required autocomplete="username" value="admin">
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="passwordInput">Password</label>
+            <input class="form-control" id="passwordInput" name="password" type="password" required autocomplete="current-password" value="admin123">
+          </div>
+          <button class="btn btn-primary w-100" type="submit" id="submitLoginBtn">Sign in as Administrator</button>
+        <% } %>
+      </form>
+
+      <div class="mt-4 pt-3 border-top text-secondary small">
+        <div class="fw-semibold mb-1">Demo Credentials:</div>
+        <% if (role === 'admin') { %>
+          <code>admin</code> / <code>admin123</code>
+        <% } else if (role === 'officer') { %>
+          <code>officer@gem.gov.in</code> / <code>officer123</code>
+        <% } else { %>
+          <code>compliance@bharattech.example</code> / <code>bidder123</code>
+        <% } %>
+      </div>
+    </div>
+  </div>
+</section>
+
+<%- include('partials/footer') %>

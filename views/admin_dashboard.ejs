@@ -1,0 +1,112 @@
+<%- include('partials/header', { title: 'Admin Dashboard · GeM Compliance' }) %>
+
+<section class="page-hero" id="adminHero">
+  <div class="container">
+    <p class="eyebrow">Administrator workspace</p>
+    <h1>Control centre</h1>
+    <p>Import GeM tenders and manage staff access.</p>
+    <p class="small mb-0">
+      <a class="link-light" href="/tenders/import-gem">Import GeM tender</a> · 
+      <a class="link-light" href="/admin/assignments">Manage Tender Assignments</a>
+    </p>
+  </div>
+</section>
+
+<section class="section" id="adminStats">
+  <div class="container">
+    <div class="stat-row">
+      <div class="stat" id="statTenders">
+        <div class="stat-value"><%= stats.tenders %></div>
+        <div class="stat-label">Tenders</div>
+      </div>
+      <div class="stat" id="statOfficers">
+        <div class="stat-value"><%= stats.officers %></div>
+        <div class="stat-label">Active officers</div>
+      </div>
+      <div class="stat" id="statBidders">
+        <div class="stat-value"><%= stats.bidders %></div>
+        <div class="stat-label">Registered bidders</div>
+      </div>
+      <div class="stat" id="statSubmissions">
+        <div class="stat-value"><%= stats.submissions %></div>
+        <div class="stat-label">Submissions</div>
+      </div>
+    </div>
+
+    <div class="row g-4 mt-2">
+      <div class="col-md-6">
+        <div class="panel h-100" id="tenderAdminPanel">
+          <h2 class="h5">Tender administration</h2>
+          <p class="text-secondary">Import and configure requirements officers will use to assess bidder compliance documents.</p>
+          <div class="d-flex gap-2">
+            <a class="btn btn-primary" href="/tenders/import-gem" id="importTenderBtn">Import GeM tender</a>
+            <a class="btn btn-outline-secondary" href="/admin/assignments" id="assignOfficersBtn">Tender Assignments</a>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="panel h-100" id="staffAccessPanel">
+          <h2 class="h5">Staff access</h2>
+          <p class="text-secondary">Add and review procurement officer accounts, credentials, and verification permissions.</p>
+          <a class="btn btn-outline-primary" href="/admin/officers" id="manageOfficersBtn">Manage officers</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel mt-4" id="tenderRegisterPanel">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+          <h2 class="h5 mb-1">Tender register</h2>
+          <p class="small text-secondary mb-0">Database IDs remain stable; serial numbers describe this registry.</p>
+        </div>
+        <a class="btn btn-sm btn-outline-primary" href="/tenders/import-gem" id="addTenderBtn">Add GeM tender</a>
+      </div>
+      <div class="table-responsive">
+        <table class="table align-middle mb-0" id="tenderRegisterTable">
+          <thead>
+            <tr>
+              <th>S.No.</th>
+              <th>Tender ID</th>
+              <th>GeM bid ID</th>
+              <th>Title</th>
+              <th>Category</th>
+              <th>Status</th>
+              <th>Stage</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% if (tenders && tenders.length > 0) { %>
+              <% tenders.forEach(function(tender, index) { %>
+                <tr>
+                  <td><%= index + 1 %></td>
+                  <td>
+                    <span class="id-badge">TND-<%= String(tender.id).padStart(5, '0') %></span>
+                    <div class="small text-secondary">v<%= tender.tender_version || '1' %></div>
+                  </td>
+                  <td><code><%= tender.gem_bid_id %></code></td>
+                  <td>
+                    <div class="fw-semibold"><%= tender.title %></div>
+                    <div class="small text-secondary"><%= tender.organization || 'Organization not set' %></div>
+                  </td>
+                  <td><span class="badge bg-light text-dark"><%= tender.category || 'Goods' %></span></td>
+                  <td><span class="badge bg-success"><%= tender.status || 'Published' %></span></td>
+                  <td><span class="badge bg-primary"><%= tender.lifecycle_stage || 'OPEN_FOR_BIDDING' %></span></td>
+                  <td>
+                    <a class="btn btn-sm btn-outline-secondary" href="/tenders/<%= tender.id %>">View Details</a>
+                  </td>
+                </tr>
+              <% }); %>
+            <% } else { %>
+              <tr>
+                <td colspan="8" class="text-center text-secondary py-4">No tenders registered yet.</td>
+              </tr>
+            <% } %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<%- include('partials/footer') %>

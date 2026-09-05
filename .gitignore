@@ -1,0 +1,14 @@
+*.py[cod]
+__pycache__/
+compliance.db
+*.db
+*.db-wal
+*.db-shm
+node_modules/
+.pytest_cache/
+uploads/*
+!uploads/.gitkeep
+static/charts/*
+!static/charts/.gitkeep
+.env
+

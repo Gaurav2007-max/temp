@@ -1,0 +1,108 @@
+<%- include('partials/header', { title: 'Verify Bid · GeM Compliance' }) %>
+
+<section class="page-hero" id="uploadHero">
+  <div class="container">
+    <p class="eyebrow">Bid Submission &amp; Compliance Intake</p>
+    <h1>Verify bidder compliance</h1>
+    <p>Upload the bidder's source documents. Identifiers and company details are extracted before portal checks run.</p>
+  </div>
+</section>
+
+<section class="section" id="uploadSection">
+  <div class="container">
+    <div class="row g-4">
+      <div class="col-lg-8">
+        <form method="post" action="/upload" enctype="multipart/form-data" class="panel form-panel" id="verifyForm">
+          <div class="mb-3">
+            <label class="form-label fw-semibold" for="tenderSelect">Target Tender / GeM Bid *</label>
+            <select name="tender_id" id="tenderSelect" class="form-select" required>
+              <option value="">Select tender…</option>
+              <% if (tenders && tenders.length > 0) { %>
+                <% tenders.forEach(function(t) { %>
+                  <option value="<%= t.id %>" <%= (prefill && String(prefill.tender_id) === String(t.id)) ? 'selected' : '' %>>
+                    TND-<%= String(t.id).padStart(5, '0') %> · <%= t.gem_bid_id %> — <%= t.title %>
+                  </option>
+                <% }); %>
+              <% } %>
+            </select>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Bidder Legal Name</label>
+            <input type="text" name="legal_name" id="legalNameInput" class="form-control" placeholder="e.g. Bharat Tech Solutions Private Limited" value="Bharat Tech Solutions Private Limited" required>
+          </div>
+
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">PAN Number *</label>
+              <input type="text" name="pan" id="panInput" class="form-control text-uppercase" placeholder="e.g. AABCU9603R" value="AABCU9603R" required maxlength="10">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">GSTIN *</label>
+              <input type="text" name="gstin" id="gstinInput" class="form-control text-uppercase" placeholder="e.g. 07AABCU9603R1ZM" value="07AABCU9603R1ZM" required maxlength="15">
+            </div>
+          </div>
+
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Udyam Registration</label>
+              <input type="text" name="udyam" id="udyamInput" class="form-control" placeholder="e.g. UDYAM-DL-03-0012345" value="UDYAM-DL-03-0012345">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Make in India Local Content (%)</label>
+              <input type="number" name="local_content" id="localContentInput" class="form-control" placeholder="e.g. 78.5" value="78.5" step="0.1" min="0" max="100">
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold" for="documentFileInput">Bidder Compliance Documents</label>
+            <input type="file" name="documents" id="documentFileInput" class="form-control" multiple accept=".pdf,.png,.jpg,.jpeg,.docx,.txt" />
+            <div class="form-text">Select document files (GST, PAN, Udyam, OEM Authorization, etc.) or proceed with verified credentials above.</div>
+          </div>
+
+          <div class="mt-4 d-flex flex-wrap gap-2">
+            <button type="submit" class="btn btn-primary btn-lg" id="submitBtn">
+              Extract &amp; Verify Documents
+            </button>
+            <a href="/dashboard" class="btn btn-outline-secondary btn-lg">Cancel</a>
+          </div>
+        </form>
+      </div>
+
+      <div class="col-lg-4">
+        <aside class="panel side-panel h-100" id="uploadAside">
+          <h2 class="h5">Document-first verification</h2>
+          <p class="text-secondary small">
+            The uploaded bundle is the source of bidder identity. The engine extracts identifiers, cross-checks each mock provider (GSTN, Income Tax, MSME, BIS, OEM register), and generates the compliance evidence trace for the procurement officer.
+          </p>
+          <div class="alert alert-light border small">
+            <strong>Quick Pre-fill Test Profiles:</strong>
+            <div class="mt-2 d-flex flex-column gap-1">
+              <button type="button" class="btn btn-sm btn-outline-success text-start" onclick="prefill('Bharat Tech Solutions Private Limited', 'AABCU9603R', '07AABCU9603R1ZM', 'UDYAM-DL-03-0012345', 78.5)">
+                ● Bharat Tech (High compliance, 78.5% local)
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-warning text-start" onclick="prefill('Precision Components India LLP', 'AAACP1234A', '27AAACP1234A1Z5', 'UDYAM-MH-01-0098765', 52.0)">
+                ● Precision Components (Medium, pending return)
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-danger text-start" onclick="prefill('Uttar Pradesh Agro Machines', 'AAGCS5521K', '09AAGCS5521K1ZL', 'UDYAM-UP-02-0045612', 35.0)">
+                ● UP Agro Machines (Cancelled GSTIN, high risk)
+              </button>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+function prefill(name, pan, gstin, udyam, local) {
+  document.getElementById('legalNameInput').value = name;
+  document.getElementById('panInput').value = pan;
+  document.getElementById('gstinInput').value = gstin;
+  document.getElementById('udyamInput').value = udyam;
+  document.getElementById('localContentInput').value = local;
+}
+</script>
+
+<%- include('partials/footer') %>

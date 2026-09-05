@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+
+{% block title %}Bidder Registration • GeM Compliance Verification Platform{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto my-8 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden" id="register-container">
+    <!-- Header Banner -->
+    <div class="bg-gem-navy text-white px-8 py-6 border-b border-slate-800">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="bg-amber-500 text-gem-navy font-black text-xl px-2.5 py-1 rounded-md">
+                    GeM
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold tracking-tight">Enterprise Bidder Registration</h1>
+                    <p class="text-xs text-slate-300 mt-0.5">Government e-Marketplace • Supplier & Vendor Compliance Portal</p>
+                </div>
+            </div>
+            <a href="/login" class="text-xs text-amber-300 hover:text-white font-medium flex items-center">
+                <i class="fa-solid fa-arrow-right-to-bracket mr-1"></i> Sign In
+            </a>
+        </div>
+    </div>
+
+    <!-- Informational Banner regarding Officers and Admins -->
+    <div class="bg-slate-50 border-b border-slate-200 px-8 py-3.5 flex items-start space-x-3 text-xs text-slate-700">
+        <div class="w-6 h-6 rounded-full bg-blue-100 text-gem-navy flex items-center justify-center shrink-0 mt-0.5">
+            <i class="fa-solid fa-shield-halved text-[11px]"></i>
+        </div>
+        <div class="leading-relaxed">
+            <span class="font-bold text-slate-900">Bidder Portal Access:</span> Public self-registration is strictly reserved for <strong>Bidders & Enterprise Suppliers</strong>. Procurement Officers and Technical Evaluators are provisioned directly by the <strong>GeM System Administrator</strong> via the Admin Console.
+        </div>
+    </div>
+
+    <!-- Registration Form -->
+    <form action="/auth/register" method="POST" class="p-8 space-y-6 text-xs" id="register-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="role" value="bidder">
+
+        <!-- Step 1: User Account Credentials -->
+        <div>
+            <div class="flex items-center justify-between border-b border-slate-100 pb-2 mb-4">
+                <h2 class="font-bold text-slate-800 uppercase tracking-wider text-[11px] flex items-center">
+                    <span class="w-5 h-5 rounded-full bg-gem-navy text-white text-[10px] font-bold inline-flex items-center justify-center mr-2">1</span>
+                    User Account Credentials
+                </h2>
+                <span class="text-[10px] text-slate-400 font-normal">* Required fields</span>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Full Name / Authorized Signatory <span class="text-rose-500">*</span></label>
+                    <input type="text" name="full_name" required value="{{ form.get('full_name', '') }}" placeholder="e.g. Vikram Sharma" class="w-full border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-gem-blue text-xs">
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Desired Username <span class="text-rose-500">*</span></label>
+                    <input type="text" name="username" required value="{{ form.get('username', '') }}" placeholder="e.g. v_sharma_enterprises" class="w-full border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-gem-blue text-xs font-mono">
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Official Gmail / Email Address <span class="text-rose-500">*</span></label>
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                            <i class="fa-solid fa-envelope"></i>
+                        </span>
+                        <input type="email" name="email" required value="{{ form.get('email', '') }}" placeholder="e.g. aroraganesh2007@gmail.com" class="w-full pl-9 border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-gem-blue text-xs">
+                    </div>
+                    <span class="text-[10px] text-slate-400 mt-1 block">You can sign in using either your username or this email address.</span>
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Contact Mobile / Phone</label>
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                            <i class="fa-solid fa-phone"></i>
+                        </span>
+                        <input type="text" name="phone" value="{{ form.get('phone', '') }}" placeholder="+91 98765 43210" class="w-full pl-9 border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-gem-blue text-xs">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Password <span class="text-rose-500">*</span></label>
+                    <input type="password" name="password" required minlength="4" placeholder="Minimum 4 characters" class="w-full border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-gem-blue text-xs font-mono">
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Confirm Password <span class="text-rose-500">*</span></label>
+                    <input type="password" name="confirm_password" required minlength="4" placeholder="Re-enter password" class="w-full border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-gem-blue text-xs font-mono">
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 2: Enterprise / Supplier Details -->
+        <div>
+            <div class="flex items-center justify-between border-b border-slate-100 pb-2 mb-4">
+                <h2 class="font-bold text-slate-800 uppercase tracking-wider text-[11px] flex items-center">
+                    <span class="w-5 h-5 rounded-full bg-gem-navy text-white text-[10px] font-bold inline-flex items-center justify-center mr-2">2</span>
+                    Enterprise / Trade Profile
+                </h2>
+            </div>
+
+            <div class="space-y-4">
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Enterprise / Company Trade Name <span class="text-slate-400 font-normal">(Optional)</span></label>
+                    <input type="text" name="company_name" id="input_company_name" value="{{ form.get('company_name', '') }}" placeholder="e.g. Bharat Tech Solutions Pvt Ltd" class="w-full border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-gem-blue text-xs">
+                    <span class="text-[10px] text-slate-400 mt-1 block">If left blank, your full name will be used as your enterprise title.</span>
+                </div>
+
+                <div class="bg-blue-50/70 border border-blue-200 rounded-lg p-3 text-xs text-slate-700 flex items-start space-x-2.5">
+                    <i class="fa-solid fa-circle-check text-gem-blue mt-0.5 text-sm"></i>
+                    <div class="space-y-1">
+                        <div class="font-bold text-gem-navy">Instant Verification at Tender Application</div>
+                        <div class="text-[11px] text-slate-600 leading-relaxed">
+                            Statutory compliance identifiers (GSTIN, PAN, and MSME Udyam Registration) are entered and authenticated during active tender bid submission, eliminating upfront bureaucratic friction.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="pt-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div class="text-slate-500 text-[11px] max-w-sm">
+                By registering, you agree to comply with GeM terms, GFR 2017 rules, and public procurement transparency standards.
+            </div>
+            <button type="submit" id="btn-submit-register" class="w-full sm:w-auto px-8 py-3 bg-gem-navy hover:bg-slate-800 text-white font-bold rounded-lg shadow-sm text-xs transition-colors flex items-center justify-center space-x-2">
+                <i class="fa-solid fa-user-plus"></i>
+                <span>Register Bidder Account</span>
+            </button>
+        </div>
+    </form>
+
+    <div class="bg-slate-50 px-8 py-4 border-t border-slate-200 flex justify-between items-center text-xs text-slate-600">
+        <span>Already have an account?</span>
+        <a href="/login" class="font-bold text-gem-navy hover:underline flex items-center">
+            <span>Sign In to Dashboard</span>
+            <i class="fa-solid fa-arrow-right ml-1 text-[10px]"></i>
+        </a>
+    </div>
+</div>
+{% endblock %}

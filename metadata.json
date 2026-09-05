@@ -1,0 +1,6 @@
+{
+  "name": "GeM Compliance Verify",
+  "description": "AI-powered integrated bid compliance verification platform for GeM procurement",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

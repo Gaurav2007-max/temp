@@ -1,0 +1,48 @@
+<%- include('partials/header', { title: 'Register as Bidder · GeM Compliance' }) %>
+
+<section class="page-hero" id="registerHero">
+  <div class="container">
+    <p class="eyebrow">Bidder Onboarding</p>
+    <h1>Register your enterprise</h1>
+    <p>Create an account to participate in tenders and track statutory compliance verification.</p>
+  </div>
+</section>
+
+<section class="section" id="registerSection">
+  <div class="container">
+    <div class="panel form-panel" style="max-width: 580px; margin: auto;">
+      <form method="post" action="/bidder/register" id="registerForm">
+        <div class="mb-3">
+          <label class="form-label">Company / Legal Name *</label>
+          <input type="text" name="name" class="form-control" placeholder="e.g. Apex Industrial Solutions Ltd" required>
+        </div>
+        <div class="row g-3 mb-3">
+          <div class="col-md-6">
+            <label class="form-label">Company PAN *</label>
+            <input type="text" name="pan" class="form-control text-uppercase" placeholder="e.g. AAACX1234F" required maxlength="10">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">GSTIN *</label>
+            <input type="text" name="gstin" class="form-control text-uppercase" placeholder="e.g. 07AAACX1234F1Z1" required maxlength="15">
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Official Email Address *</label>
+          <input type="email" name="email" class="form-control" placeholder="compliance@example.com" required>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Phone Number</label>
+          <input type="tel" name="phone" class="form-control" placeholder="+91 98765 43210">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Password *</label>
+          <input type="password" name="password" class="form-control" required minlength="6">
+        </div>
+        <button type="submit" class="btn btn-primary w-100" id="submitRegisterBtn">Complete Registration</button>
+        <p class="small text-center mt-3 mb-0">Already registered? <a href="/login/bidder">Sign in here</a></p>
+      </form>
+    </div>
+  </div>
+</section>
+
+<%- include('partials/footer') %>

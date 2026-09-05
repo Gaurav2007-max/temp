@@ -1,0 +1,126 @@
+<%- include('partials/header', { title: 'Compliance Report · ' + bidder.legal_name }) %>
+
+<section class="section" id="reportSection">
+  <div class="container report-sheet">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4 no-print">
+      <div>
+        <h1 class="h3 mb-1">Compliance verification report</h1>
+        <p class="text-secondary mb-0">Generated <%= new Date().toUTCString() %></p>
+      </div>
+      <div class="d-flex gap-2">
+        <a class="btn btn-outline-secondary" href="/bidder/<%= bidder.id %>">Back to Bidder</a>
+        <button class="btn btn-primary" onclick="window.print()" id="printReportBtn">Print / Save PDF</button>
+      </div>
+    </div>
+
+    <header class="report-header p-3 border rounded mb-4 bg-light d-flex justify-content-between align-items-center">
+      <div>
+        <div class="brand-mark mb-1">GeM</div>
+        <div class="fw-bold fs-5">Government e-Marketplace (GeM)</div>
+        <div class="small text-secondary">Bid Compliance Verification &amp; Due Diligence Platform</div>
+      </div>
+      <div class="text-end small">
+        <div class="badge bg-secondary text-uppercase mb-1">Confidential — For Procurement Use</div>
+        <div class="text-secondary">Statutory Due Diligence Document</div>
+      </div>
+    </header>
+
+    <h2 class="h5 mt-4">1. Bidder &amp; Tender Reference</h2>
+    <table class="table table-sm report-table">
+      <tr><th style="width: 250px;">Bidder ID</th><td>BID-<%= String(bidder.id).padStart(5, '0') %> (Database ID <%= bidder.id %>)</td></tr>
+      <tr><th>Tender ID</th><td>TND-<%= String(tender.id).padStart(5, '0') %> (GeM Bid ID: <code><%= tender.gem_bid_id %></code>)</td></tr>
+      <tr><th>Tender Title</th><td><%= tender.title %> (<%= tender.organization || 'Government Department' %>)</td></tr>
+      <tr><th>Legal Name</th><td><strong><%= bidder.legal_name %></strong></td></tr>
+      <tr><th>Trade Name</th><td><%= bidder.trade_name || bidder.legal_name %></td></tr>
+      <tr><th>PAN / GSTIN</th><td><code><%= bidder.pan %></code> / <code><%= bidder.gstin %></code></td></tr>
+      <tr><th>Udyam / CIN</th><td><code><%= bidder.udyam || '—' %></code> / <code><%= bidder.cin || '—' %></code></td></tr>
+      <tr><th>Registered Address</th><td><%= bidder.address || '—' %></td></tr>
+    </table>
+
+    <h2 class="h5 mt-4">2. Overall Assessment</h2>
+    <table class="table table-sm report-table">
+      <tr><th style="width: 250px;">Eligibility Finding</th><td><span class="badge <%= (overall_status === 'Qualified' || overall_status === 'Passed') ? 'bg-success' : 'bg-warning text-dark' %>"><%= overall_status %></span></td></tr>
+      <tr><th>Compliance Score</th><td><strong><%= result.compliance_score %> / 100</strong></td></tr>
+      <tr><th>Risk Level</th><td><%= result.risk_level %> (Risk Score: <%= result.risk_score %>)</td></tr>
+      <tr><th>AI Recommendation</th><td><%= result.recommendation %></td></tr>
+      <tr><th>Recommendation Notes</th><td><%= result.recommendation_notes %></td></tr>
+      <tr><th>Officer Decision</th><td><strong><%= result.officer_decision || 'Pending Determination' %></strong></td></tr>
+      <% if (result.officer_remarks) { %>
+        <tr><th>Officer Remarks</th><td><%= result.officer_remarks %></td></tr>
+      <% } %>
+      <tr><th>Workflow State</th><td><%= result.workflow_state %> (Verification v<%= result.verification_version || 1 %>)</td></tr>
+      <tr><th>Timestamp</th><td><%= result.verified_at || new Date().toISOString() %></td></tr>
+    </table>
+
+    <h2 class="h5 mt-4">3. Requirement Matrix &amp; Evidence Audit</h2>
+    <table class="table table-sm report-table">
+      <thead>
+        <tr>
+          <th>Requirement Clause</th>
+          <th>Mandatory</th>
+          <th>Evidence Extracted</th>
+          <th>Verification Source</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% if (requirement_matrix && requirement_matrix.length > 0) { %>
+          <% requirement_matrix.forEach(function(row) { %>
+            <tr>
+              <td><%= row.requirement %></td>
+              <td><%= row.mandatory ? 'Yes' : 'No' %></td>
+              <td><%= row.evidence || 'Certified Document' %></td>
+              <td><%= row.source || 'Statutory Portal' %></td>
+              <td>
+                <span class="badge <%= (row.status === 'PASS' || row.status === 'Verified') ? 'bg-success' : (row.status === 'N/A' ? 'bg-secondary' : 'bg-danger') %>">
+                  <%= row.status %>
+                </span>
+              </td>
+            </tr>
+          <% }); %>
+        <% } else { %>
+          <tr><td colspan="5" class="text-secondary small">No matrix rows available.</td></tr>
+        <% } %>
+      </tbody>
+    </table>
+
+    <h2 class="h5 mt-4">4. Portal Checks Summary</h2>
+    <table class="table table-sm report-table">
+      <thead>
+        <tr>
+          <th>Statutory Portal</th>
+          <th>Verification Status</th>
+          <th>Score</th>
+          <th>Details</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% if (checks && Object.keys(checks).length > 0) { %>
+          <% Object.entries(checks).forEach(function([key, chk]) { %>
+            <tr>
+              <td><strong><%= key.replace(/_/g, ' ').toUpperCase() %></strong></td>
+              <td><span class="badge <%= chk.verified ? 'bg-success' : 'bg-warning text-dark' %>"><%= chk.status %></span></td>
+              <td><%= chk.score || 0 %>/100</td>
+              <td class="small"><%= chk.message %></td>
+            </tr>
+          <% }); %>
+        <% } %>
+      </tbody>
+    </table>
+
+    <div class="mt-5 pt-4 border-top d-flex justify-content-between">
+      <div style="width: 250px;">
+        <div class="border-bottom pb-4 mb-1"></div>
+        <div class="small fw-semibold">Signature: Procurement Officer</div>
+        <div class="small text-secondary">Verified with authoritative portals</div>
+      </div>
+      <div style="width: 250px;">
+        <div class="border-bottom pb-4 mb-1"></div>
+        <div class="small fw-semibold">Digital Authentication Token</div>
+        <div class="small text-secondary">GEM-VERIFY-SECURE-STAMP</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<%- include('partials/footer') %>

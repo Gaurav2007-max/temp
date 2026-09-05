@@ -1,0 +1,90 @@
+<%- include('partials/header', { title: 'Portal API Status · GeM Compliance' }) %>
+
+<section class="page-hero" id="apiStatusHero">
+  <div class="container">
+    <p class="eyebrow">Integrations &amp; Portals</p>
+    <h1>Verification provider status</h1>
+    <p>Health and latency monitoring for statutory portal cross-validation services.</p>
+  </div>
+</section>
+
+<section class="section" id="apiStatusSection">
+  <div class="container">
+    <div class="panel">
+      <div class="table-responsive">
+        <table class="table align-middle mb-0" id="apiStatusTable">
+          <thead>
+            <tr>
+              <th>Provider</th>
+              <th>Service</th>
+              <th>Endpoint / Protocol</th>
+              <th>Status</th>
+              <th>Latency</th>
+              <th>Mode</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>GSTN</strong></td>
+              <td>GSTIN Verification &amp; Return Filing Track</td>
+              <td><code>/api/gstn/v2/searchTaxpayer</code></td>
+              <td><span class="badge bg-success">Operational</span></td>
+              <td>84 ms</td>
+              <td><span class="badge bg-light text-dark">SANDBOX_MOCK</span></td>
+            </tr>
+            <tr>
+              <td><strong>Income Tax Dept</strong></td>
+              <td>PAN - Aadhaar - Name Verification</td>
+              <td><code>/api/incometax/v1/panValidation</code></td>
+              <td><span class="badge bg-success">Operational</span></td>
+              <td>62 ms</td>
+              <td><span class="badge bg-light text-dark">SANDBOX_MOCK</span></td>
+            </tr>
+            <tr>
+              <td><strong>MSME Ministry</strong></td>
+              <td>Udyam Registration &amp; Enterprise Class</td>
+              <td><code>/api/udyam/v1/verifyEnterprise</code></td>
+              <td><span class="badge bg-success">Operational</span></td>
+              <td>110 ms</td>
+              <td><span class="badge bg-light text-dark">SANDBOX_MOCK</span></td>
+            </tr>
+            <tr>
+              <td><strong>MCA21</strong></td>
+              <td>Corporate Affairs CIN / Company Master</td>
+              <td><code>/api/mca/v3/companyMaster</code></td>
+              <td><span class="badge bg-success">Operational</span></td>
+              <td>95 ms</td>
+              <td><span class="badge bg-light text-dark">SANDBOX_MOCK</span></td>
+            </tr>
+            <tr>
+              <td><strong>BIS Portal</strong></td>
+              <td>CRS / ISI License &amp; Scope Validity</td>
+              <td><code>/api/bis/v1/licenseCheck</code></td>
+              <td><span class="badge bg-success">Operational</span></td>
+              <td>142 ms</td>
+              <td><span class="badge bg-light text-dark">SANDBOX_MOCK</span></td>
+            </tr>
+            <tr>
+              <td><strong>EPFO Portal</strong></td>
+              <td>Establishment ECR &amp; Wage Compliance</td>
+              <td><code>/api/epfo/v1/remittanceCheck</code></td>
+              <td><span class="badge bg-success">Operational</span></td>
+              <td>120 ms</td>
+              <td><span class="badge bg-light text-dark">SANDBOX_MOCK</span></td>
+            </tr>
+            <tr>
+              <td><strong>Debarment Registry</strong></td>
+              <td>Central Public Procurement Debarred List</td>
+              <td><code>/api/cppp/v1/blacklist</code></td>
+              <td><span class="badge bg-success">Operational</span></td>
+              <td>45 ms</td>
+              <td><span class="badge bg-light text-dark">LOCAL_REGISTRY</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<%- include('partials/footer') %>

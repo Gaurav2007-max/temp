@@ -1,0 +1,99 @@
+<%- include('partials/header', { title: tender.title + ' · Tender Details' }) %>
+
+<section class="page-hero" id="tenderDetailHero">
+  <div class="container">
+    <p class="eyebrow">Tender Specifications &amp; Submissions</p>
+    <h1><%= tender.title %></h1>
+    <p class="mb-0">
+      <span class="id-badge">TND-<%= String(tender.id).padStart(5, '0') %></span>
+      · GeM Bid: <code><%= tender.gem_bid_id %></code>
+      · <span class="badge bg-primary"><%= tender.lifecycle_stage || 'OPEN_FOR_BIDDING' %></span>
+    </p>
+  </div>
+</section>
+
+<section class="section" id="tenderDetailSection">
+  <div class="container">
+    <div class="row g-4 mb-4">
+      <div class="col-lg-6">
+        <div class="panel h-100">
+          <h2 class="h5 mb-3">Tender Summary</h2>
+          <table class="table table-sm small mb-0">
+            <tr><th class="text-secondary" style="width: 180px;">Organization</th><td><%= tender.organization || '—' %></td></tr>
+            <tr><th class="text-secondary">Category</th><td><%= tender.category || 'Goods' %></td></tr>
+            <tr><th class="text-secondary">Estimated Value</th><td>₹<%= (tender.estimated_value || 0).toLocaleString('en-IN') %></td></tr>
+            <tr><th class="text-secondary">Min Local Content</th><td><%= tender.min_local_content || 50 %>%</td></tr>
+            <tr><th class="text-secondary">Version</th><td><%= tender.tender_version || 'v1' %></td></tr>
+            <tr><th class="text-secondary">Status</th><td><span class="badge bg-success"><%= tender.status %></span></td></tr>
+          </table>
+        </div>
+      </div>
+      <div class="col-lg-6">
+        <div class="panel h-100">
+          <h2 class="h5 mb-3">Required Documents &amp; Eligibility</h2>
+          <ul class="list-group list-group-flush small">
+            <% if (tender.required_documents && Array.isArray(tender.required_documents)) { %>
+              <% tender.required_documents.forEach(function(doc) { %>
+                <li class="list-group-item px-0 py-2 d-flex justify-content-between">
+                  <span><%= doc %></span>
+                  <span class="badge bg-light text-dark border">Mandatory</span>
+                </li>
+              <% }); %>
+            <% } else { %>
+              <li class="list-group-item px-0 py-2">Standard statutory bundle (GST, PAN, Local Content)</li>
+            <% } %>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 class="h5 mb-0">Bidders participating in this tender</h2>
+        <a href="/upload?tender_id=<%= tender.id %>" class="btn btn-sm btn-primary">Submit Bidder Document</a>
+      </div>
+      <div class="table-responsive">
+        <table class="table align-middle mb-0">
+          <thead>
+            <tr>
+              <th>Bidder ID</th>
+              <th>Legal Name</th>
+              <th>PAN / GSTIN</th>
+              <th>Compliance Score</th>
+              <th>Risk Level</th>
+              <th>Decision</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% if (bidders && bidders.length > 0) { %>
+              <% bidders.forEach(function(b) { %>
+                <% const r = results[b.id]; %>
+                <tr>
+                  <td><span class="id-badge">BID-<%= String(b.id).padStart(5, '0') %></span></td>
+                  <td class="fw-semibold"><%= b.legal_name %></td>
+                  <td class="small"><code><%= b.pan %></code> / <code><%= b.gstin %></code></td>
+                  <td><%= r ? r.compliance_score : '—' %></td>
+                  <td>
+                    <% if (r) { %>
+                      <span class="risk-badge risk-<%= r.risk_level.toLowerCase() %>"><%= r.risk_level %></span>
+                    <% } else { %>—<% } %>
+                  </td>
+                  <td><span class="badge bg-secondary"><%= r ? r.officer_decision : 'Pending' %></span></td>
+                  <td>
+                    <a class="btn btn-sm btn-outline-primary" href="/bidder/<%= b.id %>">Review</a>
+                    <a class="btn btn-sm btn-outline-secondary" href="/report/<%= b.id %>">Report</a>
+                  </td>
+                </tr>
+              <% }); %>
+            <% } else { %>
+              <tr><td colspan="7" class="text-center text-secondary py-3">No bidder submissions under this tender yet.</td></tr>
+            <% } %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<%- include('partials/footer') %>

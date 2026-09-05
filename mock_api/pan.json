@@ -1,0 +1,64 @@
+{
+  "records": [
+    {
+      "pan": "AABCU9603R",
+      "name": "BHARAT TECH SOLUTIONS PRIVATE LIMITED",
+      "status": "Active",
+      "entity_type": "Company",
+      "aadhaar_linked": true,
+      "it_compliance": {
+        "itr_filed_fy2425": true,
+        "tax_dues": 0,
+        "last_assessment_year": "2024-25"
+      }
+    },
+    {
+      "pan": "AAACP1234A",
+      "name": "PRECISION COMPONENTS INDIA LLP",
+      "status": "Active",
+      "entity_type": "Firm/LLP",
+      "aadhaar_linked": true,
+      "it_compliance": {
+        "itr_filed_fy2425": true,
+        "tax_dues": 12500,
+        "last_assessment_year": "2024-25"
+      }
+    },
+    {
+      "pan": "AAGCS5521K",
+      "name": "UTTAR PRADESH AGRO MACHINES",
+      "status": "Active",
+      "entity_type": "Company",
+      "aadhaar_linked": false,
+      "it_compliance": {
+        "itr_filed_fy2425": false,
+        "tax_dues": 450000,
+        "last_assessment_year": "2023-24"
+      }
+    },
+    {
+      "pan": "AADCS1234B",
+      "name": "SOUTH INDIA DIGITAL SERVICES",
+      "status": "Active",
+      "entity_type": "Company",
+      "aadhaar_linked": true,
+      "it_compliance": {
+        "itr_filed_fy2425": true,
+        "tax_dues": 0,
+        "last_assessment_year": "2024-25"
+      }
+    },
+    {
+      "pan": "AABCW7788D",
+      "name": "EASTERN FABRICATORS WORKS",
+      "status": "Active",
+      "entity_type": "Individual",
+      "aadhaar_linked": true,
+      "it_compliance": {
+        "itr_filed_fy2425": true,
+        "tax_dues": 0,
+        "last_assessment_year": "2024-25"
+      }
+    }
+  ]
+}

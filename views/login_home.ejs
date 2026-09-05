@@ -1,0 +1,84 @@
+<%- include('partials/header', { title: 'Sign In · GeM Compliance' }) %>
+
+<section class="hero" id="homeHero">
+  <div class="hero-bg"></div>
+  <div class="container hero-inner">
+    <p class="hero-brand">GeM Compliance Verify</p>
+    <h1>Secure procurement review, role by role.</h1>
+    <p class="hero-lead">
+      Sign in to manage tender rules, review bidder submissions, or submit your compliance document.
+    </p>
+    <div class="row g-3 mt-3 login-choices">
+      <div class="col-md-4">
+        <a class="login-choice" href="/login/admin" id="loginChoiceAdmin">
+          <strong>Administrator</strong>
+          <span>Manage tenders and staff access</span>
+        </a>
+      </div>
+      <div class="col-md-4">
+        <a class="login-choice" href="/login/officer" id="loginChoiceOfficer">
+          <strong>Procurement Officer</strong>
+          <span>Review evidence and make decisions</span>
+        </a>
+      </div>
+      <div class="col-md-4">
+        <a class="login-choice" href="/login/bidder" id="loginChoiceBidder">
+          <strong>Bidder</strong>
+          <span>Submit a document for verification</span>
+        </a>
+      </div>
+    </div>
+
+    <div class="mt-4 p-3 bg-white bg-opacity-75 rounded shadow-sm" style="max-width: 650px;" id="quickLoginPanel">
+      <div class="small fw-semibold text-secondary mb-2">QUICK DEMO ACCESS (CLICK TO SWITCH ROLE):</div>
+      <div class="d-flex flex-wrap gap-2">
+        <form method="POST" action="/login/admin" class="d-inline">
+          <input type="hidden" name="username" value="admin">
+          <input type="hidden" name="password" value="admin123">
+          <button type="submit" class="btn btn-sm btn-outline-primary" id="quickAdminBtn">Login as Administrator</button>
+        </form>
+        <form method="POST" action="/login/officer" class="d-inline">
+          <input type="hidden" name="username" value="officer@gem.gov.in">
+          <input type="hidden" name="password" value="officer123">
+          <button type="submit" class="btn btn-sm btn-outline-success" id="quickOfficerBtn">Login as Officer (Priya Sharma)</button>
+        </form>
+        <form method="POST" action="/login/bidder" class="d-inline">
+          <input type="hidden" name="username" value="compliance@bharattech.example">
+          <input type="hidden" name="password" value="bidder123">
+          <button type="submit" class="btn btn-sm btn-outline-dark" id="quickBidderBtn">Login as Bidder (Bharat Tech)</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section section-alt" id="homeInfo">
+  <div class="container">
+    <div class="section-head">
+      <h2>AI-assisted decision support</h2>
+      <p>Documents are extracted and checked against configured portal providers. Final qualification remains with the Procurement Officer.</p>
+    </div>
+    <div class="row g-4 mt-2">
+      <div class="col-md-4">
+        <div class="panel h-100">
+          <h3 class="h6 fw-bold">Automated Cross-Validation</h3>
+          <p class="text-secondary small mb-0">Cross-checks PAN, GSTIN, Udyam registration, EPFO, ESIC, and MCA records against official portals.</p>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="panel h-100">
+          <h3 class="h6 fw-bold">Traceable Audit Engine</h3>
+          <p class="text-secondary small mb-0">Every verification decision preserves the underlying document trace, exact clause match, and verification timestamp.</p>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="panel h-100">
+          <h3 class="h6 fw-bold">Life-Cycle Management</h3>
+          <p class="text-secondary small mb-0">Handles tender publication, bidder clarifications, officer evaluations, corrigendum versions, and final award logging.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<%- include('partials/footer') %>

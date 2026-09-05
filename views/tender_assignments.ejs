@@ -1,0 +1,89 @@
+<%- include('partials/header', { title: 'Tender Assignments · GeM Compliance' }) %>
+
+<section class="page-hero" id="assignmentsHero">
+  <div class="container">
+    <p class="eyebrow">Governance &amp; Delegation</p>
+    <h1>Tender assignments</h1>
+    <p>Assign procurement officers to specific tenders for review and award decisions.</p>
+  </div>
+</section>
+
+<section class="section" id="assignmentsSection">
+  <div class="container">
+    <div class="row g-4">
+      <div class="col-lg-7">
+        <div class="panel">
+          <h2 class="h5 mb-3">Current Tender Assignments</h2>
+          <div class="table-responsive">
+            <table class="table align-middle mb-0" id="assignmentsTable">
+              <thead>
+                <tr>
+                  <th>Tender</th>
+                  <th>Assigned Officer</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% if (assignments && assignments.length > 0) { %>
+                  <% assignments.forEach(function(a) { %>
+                    <tr>
+                      <td>
+                        <span class="id-badge">TND-<%= String(a.tender_id).padStart(5, '0') %></span>
+                        <div class="fw-semibold small"><%= a.tender_title %></div>
+                      </td>
+                      <td>
+                        <div class="fw-semibold"><%= a.officer_name %></div>
+                        <div class="small text-secondary"><%= a.officer_email %></div>
+                      </td>
+                      <td><span class="badge bg-success">Active</span></td>
+                      <td>
+                        <form method="post" action="/admin/assignments/delete" class="d-inline">
+                          <input type="hidden" name="assignment_id" value="<%= a.id %>">
+                          <button type="submit" class="btn btn-sm btn-outline-danger">Unassign</button>
+                        </form>
+                      </td>
+                    </tr>
+                  <% }); %>
+                <% } else { %>
+                  <tr><td colspan="4" class="text-center text-secondary py-3">No assignments recorded.</td></tr>
+                <% } %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-5">
+        <div class="panel form-panel">
+          <h2 class="h5 mb-3">Assign Officer to Tender</h2>
+          <form method="post" action="/admin/assignments" id="newAssignmentForm">
+            <div class="mb-3">
+              <label class="form-label">Tender</label>
+              <select name="tender_id" class="form-select" required>
+                <% if (tenders) { %>
+                  <% tenders.forEach(function(t) { %>
+                    <option value="<%= t.id %>">TND-<%= String(t.id).padStart(5, '0') %> · <%= t.title %></option>
+                  <% }); %>
+                <% } %>
+              </select>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Procurement Officer</label>
+              <select name="officer_id" class="form-select" required>
+                <% if (officers) { %>
+                  <% officers.forEach(function(off) { %>
+                    <option value="<%= off.id %>"><%= off.name %> (<%= off.email %>)</option>
+                  <% }); %>
+                <% } %>
+              </select>
+            </div>
+            <button type="submit" class="btn btn-primary w-100" id="assignBtn">Assign Officer</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<%- include('partials/footer') %>

@@ -1,0 +1,76 @@
+<%- include('partials/header', { title: 'Procurement Officers · GeM Compliance' }) %>
+
+<section class="page-hero" id="officersHero">
+  <div class="container">
+    <p class="eyebrow">Staff access control</p>
+    <h1>Procurement Officers</h1>
+    <p>Manage officers authorized to review compliance evidence and record qualification decisions.</p>
+  </div>
+</section>
+
+<section class="section" id="officersSection">
+  <div class="container">
+    <div class="row g-4">
+      <div class="col-lg-7">
+        <div class="panel">
+          <h2 class="h5 mb-3">Active Officers</h2>
+          <div class="table-responsive">
+            <table class="table align-middle mb-0" id="officersTable">
+              <thead>
+                <tr>
+                  <th>Officer Name</th>
+                  <th>Email</th>
+                  <th>Phone</th>
+                  <th>Status</th>
+                  <th>Role</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% if (officers && officers.length > 0) { %>
+                  <% officers.forEach(function(off) { %>
+                    <tr>
+                      <td class="fw-semibold"><%= off.name %></td>
+                      <td><code><%= off.email %></code></td>
+                      <td><%= off.phone || '—' %></td>
+                      <td><span class="badge bg-success">Active</span></td>
+                      <td><span class="badge bg-light text-dark"><%= off.role %></span></td>
+                    </tr>
+                  <% }); %>
+                <% } else { %>
+                  <tr><td colspan="5" class="text-secondary text-center py-3">No officers found.</td></tr>
+                <% } %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-5">
+        <div class="panel form-panel">
+          <h2 class="h5 mb-3">Add Procurement Officer</h2>
+          <form method="post" action="/admin/officers" id="addOfficerForm">
+            <div class="mb-3">
+              <label class="form-label">Full Name</label>
+              <input type="text" name="name" class="form-control" placeholder="e.g. Ramesh Verma" required>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Official Email</label>
+              <input type="email" name="email" class="form-control" placeholder="e.g. ramesh.verma@gem.gov.in" required>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Contact Phone</label>
+              <input type="text" name="phone" class="form-control" placeholder="e.g. +91 98765 43210">
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Temporary Password</label>
+              <input type="password" name="password" class="form-control" value="officer123" required>
+            </div>
+            <button type="submit" class="btn btn-primary w-100" id="createOfficerBtn">Register Officer</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<%- include('partials/footer') %>

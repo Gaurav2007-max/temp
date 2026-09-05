@@ -1,0 +1,60 @@
+{
+  "records": [
+    {
+      "udyam": "UDYAM-DL-03-0012345",
+      "enterprise_name": "Bharat Tech Solutions Private Limited",
+      "organization_type": "Private Limited Company",
+      "major_activity": "Services",
+      "social_category": "General",
+      "gender": "Male",
+      "date_of_incorporation": "2018-03-01",
+      "date_of_udyam": "2020-07-15",
+      "msme_classification": "Medium",
+      "nic_codes": ["6201", "6202"],
+      "status": "Active",
+      "address": "A-12, Okhla Industrial Area Phase II, New Delhi 110020"
+    },
+    {
+      "udyam": "UDYAM-MH-12-0098765",
+      "enterprise_name": "Precision Components India LLP",
+      "organization_type": "Limited Liability Partnership",
+      "major_activity": "Manufacturing",
+      "social_category": "General",
+      "gender": "Female",
+      "date_of_incorporation": "2019-05-10",
+      "date_of_udyam": "2021-02-20",
+      "msme_classification": "Small",
+      "nic_codes": ["2599", "2811"],
+      "status": "Active",
+      "address": "Plot 45, MIDC Industrial Estate, Pune 411019"
+    },
+    {
+      "udyam": "UDYAM-KA-02-0044556",
+      "enterprise_name": "South India Digital Services",
+      "organization_type": "Private Limited Company",
+      "major_activity": "Services",
+      "social_category": "OBC",
+      "gender": "Male",
+      "date_of_incorporation": "2021-04-12",
+      "date_of_udyam": "2022-01-08",
+      "msme_classification": "Micro",
+      "nic_codes": ["6209"],
+      "status": "Active",
+      "address": "Electronic City Phase 1, Bengaluru 560100"
+    },
+    {
+      "udyam": "UDYAM-WB-10-0077001",
+      "enterprise_name": "Eastern Fabricators Works",
+      "organization_type": "Proprietorship",
+      "major_activity": "Manufacturing",
+      "social_category": "SC",
+      "gender": "Male",
+      "date_of_incorporation": "2016-11-22",
+      "date_of_udyam": "2020-09-30",
+      "msme_classification": "Small",
+      "nic_codes": ["2511"],
+      "status": "Active",
+      "address": "Howrah Industrial Park, Kolkata 711104"
+    }
+  ]
+}

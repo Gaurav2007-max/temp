@@ -1,0 +1,84 @@
+{
+  "records": [
+    {
+      "gstin": "07AABCU9603R1ZM",
+      "legal_name": "Bharat Tech Solutions Private Limited",
+      "trade_name": "BharatTech",
+      "registration_date": "2018-04-12",
+      "status": "Active",
+      "taxpayer_type": "Regular",
+      "state": "Delhi",
+      "address": "A-12, Okhla Industrial Area Phase II, New Delhi 110020",
+      "returns": {
+        "gstr1_filed": true,
+        "gstr3b_filed": true,
+        "last_return_period": "2026-07",
+        "pending_returns": 0
+      }
+    },
+    {
+      "gstin": "27AAACP1234A1Z5",
+      "legal_name": "Precision Components India LLP",
+      "trade_name": "Precision Components",
+      "registration_date": "2019-08-21",
+      "status": "Active",
+      "taxpayer_type": "Regular",
+      "state": "Maharashtra",
+      "address": "Plot 45, MIDC Industrial Estate, Pune 411019",
+      "returns": {
+        "gstr1_filed": true,
+        "gstr3b_filed": false,
+        "last_return_period": "2026-05",
+        "pending_returns": 2
+      }
+    },
+    {
+      "gstin": "09AAGCS5521K1ZL",
+      "legal_name": "Uttar Pradesh Agro Machines",
+      "trade_name": "UP Agro",
+      "registration_date": "2020-01-15",
+      "status": "Cancelled",
+      "taxpayer_type": "Regular",
+      "state": "Uttar Pradesh",
+      "address": "Sector 62, Noida 201301",
+      "returns": {
+        "gstr1_filed": false,
+        "gstr3b_filed": false,
+        "last_return_period": "2025-11",
+        "pending_returns": 8
+      }
+    },
+    {
+      "gstin": "29AADCS1234B1Z8",
+      "legal_name": "South India Digital Services",
+      "trade_name": "SID Services",
+      "registration_date": "2021-06-01",
+      "status": "Active",
+      "taxpayer_type": "Regular",
+      "state": "Karnataka",
+      "address": "Electronic City Phase 1, Bengaluru 560100",
+      "returns": {
+        "gstr1_filed": true,
+        "gstr3b_filed": true,
+        "last_return_period": "2026-07",
+        "pending_returns": 0
+      }
+    },
+    {
+      "gstin": "19AABCW7788D1Z2",
+      "legal_name": "Eastern Fabricators Works",
+      "trade_name": "Eastern Fab",
+      "registration_date": "2017-03-09",
+      "status": "Active",
+      "taxpayer_type": "Composition",
+      "state": "West Bengal",
+      "address": "Howrah Industrial Park, Kolkata 711104",
+      "returns": {
+        "gstr1_filed": true,
+        "gstr3b_filed": true,
+        "last_return_period": "2026-06",
+        "pending_returns": 0
+      }
+    }
+  ]
+}
