@@ -1,0 +1,402 @@
+{% extends "base.html" %}
+
+{% block title %}{{ tender.gem_bid_id }} - Tender Details & Submissions{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+  <!-- Breadcrumb & Back Navigation -->
+  <div class="flex items-center justify-between pb-2">
+    <div class="flex items-center space-x-2 text-xs text-slate-500">
+      <a href="/officer" class="hover:underline">Officer Dashboard</a>
+      <span>/</span>
+      <span class="font-mono text-slate-800 font-semibold">{{ tender.gem_bid_id }}</span>
+    </div>
+    <div class="flex items-center space-x-2">
+      {% if tender.pdf_storage_path %}
+        <a href="/tenders/pdf/{{ tender.id }}" target="_blank"
+           class="px-3 py-1.5 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 rounded text-xs font-semibold shadow-sm flex items-center gap-1">
+          <svg class="w-3.5 h-3.5 text-rose-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd"/></svg>
+          Official Bid PDF
+        </a>
+      {% endif %}
+      <button type="button" onclick="document.getElementById('corrigendum-modal').classList.remove('hidden')"
+              class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded text-xs font-semibold shadow-sm transition">
+        + Publish Corrigendum
+      </button>
+    </div>
+  </div>
+
+  <!-- Tender Header Banner -->
+  <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+    <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+      <div>
+        <div class="flex items-center gap-3">
+          <h1 class="text-xl font-bold text-slate-900">{{ tender.title }}</h1>
+          <span class="px-2 py-0.5 rounded text-xs font-mono font-bold bg-blue-50 text-blue-700 border border-blue-200">
+            {{ tender.tender_version }}
+          </span>
+        </div>
+        <p class="text-xs text-slate-500 mt-1">
+          <strong class="text-slate-700">{{ tender.organization }}</strong> &bull; GeM Ref: <span class="font-mono text-blue-600">{{ tender.gem_bid_id }}</span> &bull; Category: {{ tender.category or 'Goods & Services' }}
+        </p>
+      </div>
+
+      <!-- Lifecycle Stage Dropdown & Update -->
+      <form action="/tenders/{{ tender.id }}/stage" method="POST" class="flex items-center gap-2 bg-slate-50 p-2 rounded-lg border border-slate-200">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <span class="text-xs font-semibold text-slate-600">Stage:</span>
+        <select name="stage" class="text-xs font-semibold px-2 py-1 border border-slate-300 rounded bg-white focus:outline-none">
+          <option value="OPEN_FOR_BIDDING" {% if tender.lifecycle_stage == 'OPEN_FOR_BIDDING' %}selected{% endif %}>OPEN_FOR_BIDDING</option>
+          <option value="CLARIFICATION" {% if tender.lifecycle_stage == 'CLARIFICATION' %}selected{% endif %}>CLARIFICATION</option>
+          <option value="OFFICER_REVIEW" {% if tender.lifecycle_stage == 'OFFICER_REVIEW' %}selected{% endif %}>OFFICER_REVIEW</option>
+          <option value="DECIDED" {% if tender.lifecycle_stage == 'DECIDED' %}selected{% endif %}>DECIDED</option>
+        </select>
+        <button type="submit" class="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold transition">
+          Update
+        </button>
+      </form>
+    </div>
+
+    <!-- Key Tender Thresholds Strip -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6 pt-4 border-t border-slate-100 text-xs">
+      <div>
+        <span class="text-slate-400 block">Est. Tender Value:</span>
+        <span class="font-bold text-slate-900 font-mono text-sm">₹{{ "{:,.2f}".format(tender.estimated_value or 0) }}</span>
+      </div>
+      <div>
+        <span class="text-slate-400 block">Min. Annual Turnover:</span>
+        <span class="font-bold text-slate-900 font-mono text-sm">₹{{ "{:,.2f}".format(tender.min_turnover or 0) }}</span>
+      </div>
+      <div>
+        <span class="text-slate-400 block">Min. Local Content (MII):</span>
+        <span class="font-bold text-slate-900 font-mono text-sm">{{ tender.min_local_content }}%</span>
+      </div>
+      <div>
+        <span class="text-slate-400 block">Bidding Deadline:</span>
+        <span class="font-bold text-slate-900 font-mono text-sm">{{ tender.bid_end_date[:16] if tender.bid_end_date else '-' }}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Historical Versions / Corrigendum Banner -->
+  {% if versions | length > 1 %}
+    <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 text-xs">
+      <div class="font-bold text-blue-900 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+        <svg class="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"/></svg>
+        Corrigendum & Version History ({{ versions | length }} Versions Recorded)
+      </div>
+      <div class="space-y-2">
+        {% for v in versions %}
+          <div class="flex items-center justify-between text-slate-700 bg-white/70 p-2 rounded border border-blue-100">
+            <div>
+              <span class="font-mono font-bold text-blue-700 mr-2">{{ v.version_tag }}</span>
+              <span class="font-semibold">{{ v.corrigendum_reason }}</span>
+              <span class="text-slate-500 ml-2">({{ v.changes_summary }})</span>
+            </div>
+            <span class="text-slate-400 font-mono text-[11px]">{{ v.created_at[:16] }}</span>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+
+  <!-- SECTION: Submitted Bids & Verification Evaluations -->
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+    <div class="px-6 py-4 border-b border-slate-200 flex justify-between items-center">
+      <div>
+        <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wider">Bidder Submissions & Deterministic Evaluation</h2>
+        <p class="text-xs text-slate-500 mt-0.5">Automated compliance scoring, independent eligibility gating, and risk indicators</p>
+      </div>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-xs text-slate-600">
+        <thead class="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200">
+          <tr>
+            <th class="px-6 py-3">Bidder Enterprise</th>
+            <th class="px-6 py-3">Statutory IDs</th>
+            <th class="px-6 py-3">Compliance Score</th>
+            <th class="px-6 py-3">Mandatory Eligibility</th>
+            <th class="px-6 py-3">Bid Risk</th>
+            <th class="px-6 py-3">Officer Ruling</th>
+            <th class="px-6 py-3 text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-200">
+          {% for b in bidders_with_verifications %}
+            <tr class="hover:bg-slate-50 transition">
+              <td class="px-6 py-4">
+                <div class="font-bold text-slate-900">{{ b.company_name }}</div>
+                <div class="text-[11px] text-slate-400">{{ b.contact_person }} &bull; {{ b.email }}</div>
+              </td>
+              <td class="px-6 py-4 font-mono text-[11px]">
+                <div>GST: <span class="text-slate-800">{{ b.gstin or '-' }}</span></div>
+                <div>PAN: <span class="text-slate-800">{{ b.pan or '-' }}</span></div>
+              </td>
+              <td class="px-6 py-4">
+                {% if b.verification %}
+                  <div class="flex items-center gap-2">
+                    <span class="text-base font-bold text-slate-900">{{ b.verification.score }}</span>
+                    <span class="text-slate-400 text-[10px]">/ 100</span>
+                  </div>
+                  <div class="w-20 bg-slate-200 rounded-full h-1.5 mt-1 overflow-hidden">
+                    <div class="bg-blue-600 h-1.5 rounded-full" style="width: {{ b.verification.score }}%"></div>
+                  </div>
+                {% else %}
+                  <span class="text-slate-400 italic">Not evaluated</span>
+                {% endif %}
+              </td>
+              <td class="px-6 py-4">
+                {% if b.verification %}
+                  {% if b.verification.eligibility == 'ELIGIBLE' %}
+                    <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      ELIGIBLE
+                    </span>
+                  {% elif b.verification.eligibility == 'NOT_ELIGIBLE' %}
+                    <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                      NOT ELIGIBLE
+                    </span>
+                  {% else %}
+                    <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                      NEEDS REVIEW
+                    </span>
+                  {% endif %}
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+              <td class="px-6 py-4">
+                {% if b.verification %}
+                  {% if b.verification.risk_level == 'LOW' %}
+                    <span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">LOW</span>
+                  {% elif b.verification.risk_level == 'MEDIUM' %}
+                    <span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">MEDIUM</span>
+                  {% else %}
+                    <span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">HIGH</span>
+                  {% endif %}
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+              <td class="px-6 py-4">
+                {% if b.verification and b.verification.officer_decision %}
+                  <span class="px-2 py-0.5 rounded text-[11px] font-bold
+                    {% if b.verification.officer_decision == 'QUALIFIED' %}bg-emerald-600 text-white
+                    {% else %}bg-rose-600 text-white{% endif %}">
+                    {{ b.verification.officer_decision }}
+                  </span>
+                {% else %}
+                  <span class="text-slate-400 italic">Pending Ruling</span>
+                {% endif %}
+              </td>
+              <td class="px-6 py-4 text-right space-x-2">
+                <a href="/reports/{{ tender.id }}/{{ b.bidder_id }}"
+                   class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold shadow-sm transition">
+                  Audit Report & Ruling &rarr;
+                </a>
+                <button type="button"
+                        onclick="openClarificationModal('{{ b.bidder_id }}', '{{ b.company_name }}', '{{ b.verification.id if b.verification else 0 }}')"
+                        class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-xs font-semibold border border-slate-300 transition">
+                  Query
+                </button>
+              </td>
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="7" class="px-6 py-8 text-center text-slate-400">No bids submitted yet for this tender.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- SECTION: Active Clarifications -->
+  {% if clarifications %}
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <div class="px-6 py-4 border-b border-slate-200">
+        <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wider">Clarification Queries & Bidder Responses</h2>
+      </div>
+      <div class="divide-y divide-slate-200 text-xs">
+        {% for c in clarifications %}
+          <div class="p-6 space-y-3">
+            <div class="flex items-center justify-between">
+              <div>
+                <span class="font-bold text-slate-900">{{ c.bidder_name }}</span>
+                <span class="text-slate-400 ml-2">&bull; Ref: {{ c.requirement_code or 'General Requirement' }}</span>
+              </div>
+              <span class="px-2.5 py-0.5 rounded-full font-semibold
+                {% if c.status == 'RESPONDED' %}bg-emerald-50 text-emerald-700 border border-emerald-200
+                {% else %}bg-amber-50 text-amber-700 border border-amber-200{% endif %}">
+                {{ c.status }}
+              </span>
+            </div>
+            <div class="bg-slate-50 p-3 rounded-lg border border-slate-200">
+              <strong class="text-slate-700">Officer Query:</strong> {{ c.query_text }}
+              <div class="text-[10px] text-slate-400 mt-1 font-mono">Issued by {{ c.officer_name }} &bull; Deadline: {{ c.deadline }}</div>
+            </div>
+            {% if c.response_text %}
+              <div class="bg-emerald-50/50 p-3 rounded-lg border border-emerald-200">
+                <strong class="text-emerald-900">Bidder Response:</strong> {{ c.response_text }}
+                <div class="text-[10px] text-emerald-600 mt-1 font-mono">Responded at: {{ c.responded_at }} &bull; Supplementary documents ingested into re-verification pass</div>
+              </div>
+            {% else %}
+              <div class="text-slate-400 italic text-[11px]">Awaiting bidder supplementary documentation and formal response.</div>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+
+  <!-- SECTION: Structured Requirement Clauses Matrix -->
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+    <div class="px-6 py-4 border-b border-slate-200">
+      <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wider">Evaluation Requirement Specifications</h2>
+      <p class="text-xs text-slate-500 mt-0.5">Automated rule matrix enforced against submitted bidder documentation</p>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-xs text-slate-600">
+        <thead class="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200">
+          <tr>
+            <th class="px-6 py-3">Code</th>
+            <th class="px-6 py-3">Title</th>
+            <th class="px-6 py-3">Type</th>
+            <th class="px-6 py-3">Mandatory</th>
+            <th class="px-6 py-3">Threshold / Expected Evidence</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-200">
+          {% for r in requirements %}
+            <tr class="hover:bg-slate-50 transition">
+              <td class="px-6 py-3 font-mono font-bold text-blue-600">{{ r.code }}</td>
+              <td class="px-6 py-3 font-semibold text-slate-900">{{ r.title }}</td>
+              <td class="px-6 py-3 font-mono text-[11px] text-slate-500">{{ r.requirement_type }}</td>
+              <td class="px-6 py-3">
+                {% if r.is_mandatory %}
+                  <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200 uppercase">MANDATORY</span>
+                {% else %}
+                  <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">OPTIONAL</span>
+                {% endif %}
+              </td>
+              <td class="px-6 py-3 text-slate-700">
+                {% if r.threshold_value %}
+                  <span class="font-semibold">{{ r.threshold_value }} {{ r.threshold_unit or '' }}</span>
+                {% endif %}
+                <span class="text-slate-400 font-mono text-[10px] block">{{ r.expected_doc_types or '' }}</span>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Clarification Modal -->
+<div id="clarification-modal" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+  <div class="bg-white rounded-xl max-w-md w-full p-6 shadow-xl border border-slate-200">
+    <div class="flex justify-between items-center mb-4">
+      <h3 class="text-sm font-bold text-slate-900">Issue Clarification Query</h3>
+      <button type="button" onclick="document.getElementById('clarification-modal').classList.add('hidden')" class="text-slate-400 hover:text-slate-700">&times;</button>
+    </div>
+    <form action="/clarifications/create" method="POST" class="space-y-4">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="tender_id" value="{{ tender.id }}">
+      <input type="hidden" id="modal_bidder_id" name="bidder_id" value="">
+      <input type="hidden" id="modal_ver_id" name="verification_id" value="">
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Target Bidder</label>
+        <input type="text" id="modal_bidder_name" readonly class="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded font-semibold">
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Relevant Clause / Requirement Code</label>
+        <select name="requirement_code" class="w-full px-3 py-2 text-xs border border-slate-300 rounded">
+          <option value="REQ_TURNOVER">REQ_TURNOVER - Turnover Calculation Discrepancy</option>
+          <option value="REQ_EXPERIENCE">REQ_EXPERIENCE - Project Completion Evidence</option>
+          <option value="REQ_OEM">REQ_OEM - OEM Authorization Validity</option>
+          <option value="REQ_MII">REQ_MII - Make in India Local Content</option>
+          <option value="REQ_GST">REQ_GST - GST Compliance Evidence</option>
+          <option value="GENERAL">General Scrutiny Clarification</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Official Clarification Query *</label>
+        <textarea name="query_text" rows="3" required
+                  class="w-full px-3 py-2 text-xs border border-slate-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Specify exact documentation or evidence clarification required..."></textarea>
+      </div>
+
+      <div class="flex justify-end gap-2 pt-2">
+        <button type="button" onclick="document.getElementById('clarification-modal').classList.add('hidden')"
+                class="px-3 py-1.5 text-xs text-slate-600 hover:text-slate-800">Cancel</button>
+        <button type="submit" class="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold shadow">
+          Send Clarification Notice
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Corrigendum Modal -->
+<div id="corrigendum-modal" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+  <div class="bg-white rounded-xl max-w-lg w-full p-6 shadow-xl border border-slate-200">
+    <div class="flex justify-between items-center mb-4">
+      <h3 class="text-sm font-bold text-slate-900">Publish Tender Corrigendum (New Version)</h3>
+      <button type="button" onclick="document.getElementById('corrigendum-modal').classList.add('hidden')" class="text-slate-400 hover:text-slate-700">&times;</button>
+    </div>
+    <p class="text-xs text-slate-500 mb-4">
+      Publishing a corrigendum creates an immutable new tender version (e.g. v2, v3) preserving all prior historical snapshots.
+    </p>
+    <form action="/tenders/{{ tender.id }}/corrigendum" method="POST" class="space-y-4">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Reason for Corrigendum *</label>
+        <input type="text" name="reason" required
+               class="w-full px-3 py-2 text-xs border border-slate-300 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none"
+               placeholder="e.g. Revised turnover threshold & extended deadline following pre-bid meeting">
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Adjusted Min. Turnover (INR)</label>
+          <input type="number" name="min_turnover" value="{{ tender.min_turnover }}"
+                 class="w-full px-3 py-2 text-xs border border-slate-300 rounded focus:outline-none">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Adjusted Min. Local Content (%)</label>
+          <input type="number" name="min_local_content" value="{{ tender.min_local_content }}"
+                 class="w-full px-3 py-2 text-xs border border-slate-300 rounded focus:outline-none">
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Updated Clause Description</label>
+        <textarea name="description" rows="2"
+                  class="w-full px-3 py-2 text-xs border border-slate-300 rounded focus:outline-none">{{ tender.description }}</textarea>
+      </div>
+
+      <div class="flex justify-end gap-2 pt-2">
+        <button type="button" onclick="document.getElementById('corrigendum-modal').classList.add('hidden')"
+                class="px-3 py-1.5 text-xs text-slate-600 hover:text-slate-800">Cancel</button>
+        <button type="submit" class="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded text-xs font-semibold shadow">
+          Publish Corrigendum
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  function openClarificationModal(bidderId, bidderName, verId) {
+    document.getElementById('modal_bidder_id').value = bidderId;
+    document.getElementById('modal_bidder_name').value = bidderName;
+    document.getElementById('modal_ver_id').value = verId;
+    document.getElementById('clarification-modal').classList.remove('hidden');
+  }
+</script>
+{% endblock %}

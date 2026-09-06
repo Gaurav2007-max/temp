@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+
+{% block title %}Officer Dashboard - GeM Compliance{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+  <!-- Top Bar -->
+  <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center pb-4 border-b border-slate-200 gap-4">
+    <div>
+      <h1 class="text-2xl font-bold text-slate-900 tracking-tight">Procurement Evaluation Workspace</h1>
+      <p class="text-xs text-slate-500 mt-1">Review bidder compliance, issue clarification requests, and record final qualification determinations</p>
+    </div>
+    <div class="flex items-center space-x-3">
+      <a href="/tenders/import" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm transition flex items-center gap-1.5">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+        Import GeM Bid
+      </a>
+    </div>
+  </div>
+
+  <!-- Metric Summary -->
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+      <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Assigned Tenders</div>
+      <div class="text-2xl font-bold text-slate-900 mt-1">{{ tenders | length }}</div>
+    </div>
+    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+      <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Pending Clarifications</div>
+      <div class="text-2xl font-bold text-amber-600 mt-1">{{ pending_clarifications_count }}</div>
+    </div>
+    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+      <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Under Officer Review</div>
+      <div class="text-2xl font-bold text-blue-600 mt-1">{{ review_tenders_count }}</div>
+    </div>
+    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+      <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Decided / Qualified</div>
+      <div class="text-2xl font-bold text-emerald-600 mt-1">{{ decided_tenders_count }}</div>
+    </div>
+  </div>
+
+  <!-- Tenders Table -->
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+    <div class="px-6 py-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+      <div>
+        <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wider">Assigned Tenders for Scrutiny</h2>
+        <p class="text-xs text-slate-500 mt-0.5">Click any tender to inspect submitted documents, verified scores, and issue rulings</p>
+      </div>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-xs text-slate-600">
+        <thead class="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200">
+          <tr>
+            <th class="px-6 py-3">GeM Bid ID</th>
+            <th class="px-6 py-3">Tender Title & Department</th>
+            <th class="px-6 py-3">Est. Value (INR)</th>
+            <th class="px-6 py-3">Version</th>
+            <th class="px-6 py-3">Lifecycle Stage</th>
+            <th class="px-6 py-3">Deadline</th>
+            <th class="px-6 py-3 text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-200">
+          {% for t in tenders %}
+            <tr class="hover:bg-slate-50 transition">
+              <td class="px-6 py-4 font-mono font-bold text-blue-600">
+                {{ t.gem_bid_id }}
+              </td>
+              <td class="px-6 py-4">
+                <div class="font-semibold text-slate-900">{{ t.title }}</div>
+                <div class="text-[11px] text-slate-400">{{ t.organization }} &bull; {{ t.category or 'General' }}</div>
+              </td>
+              <td class="px-6 py-4 font-mono font-semibold text-slate-800">
+                ₹{{ "{:,.2f}".format(t.estimated_value or 0) }}
+              </td>
+              <td class="px-6 py-4">
+                <span class="px-2 py-0.5 rounded text-[11px] font-mono bg-slate-100 text-slate-700 font-semibold border border-slate-200">
+                  {{ t.tender_version }}
+                </span>
+              </td>
+              <td class="px-6 py-4">
+                <span class="px-2.5 py-1 rounded-full text-[11px] font-semibold
+                  {% if t.lifecycle_stage == 'OPEN_FOR_BIDDING' %}bg-emerald-50 text-emerald-700 border border-emerald-200
+                  {% elif t.lifecycle_stage == 'CLARIFICATION' %}bg-amber-50 text-amber-700 border border-amber-200
+                  {% elif t.lifecycle_stage == 'OFFICER_REVIEW' %}bg-blue-50 text-blue-700 border border-blue-200
+                  {% else %}bg-slate-100 text-slate-700 border border-slate-200{% endif %}">
+                  {{ t.lifecycle_stage }}
+                </span>
+              </td>
+              <td class="px-6 py-4 text-slate-500 font-mono text-[11px]">
+                {{ t.bid_end_date[:10] if t.bid_end_date else '-' }}
+              </td>
+              <td class="px-6 py-4 text-right space-x-2">
+                <a href="/tenders/{{ t.id }}" class="px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded text-xs font-semibold border border-blue-200 transition">
+                  Scrutinize Bids &rarr;
+                </a>
+              </td>
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="7" class="px-6 py-12 text-center text-slate-400">
+                No tenders assigned to your account. Import a new bid or contact the administrator.
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

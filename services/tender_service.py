@@ -1,507 +1,244 @@
-"""Tender management service: lifecycle, timeline calculations, early closure,
-corrigendum versioning, PDF ingestion, and deadline validation.
-"""
 import os
+import re
 import json
-from datetime import datetime, timezone, timedelta
-from database.db import get_db, utc_now_iso
-from services.pdf_service import generate_sample_tender_pdf, extract_pdf_pages_and_text
+import shutil
+from datetime import datetime, timedelta
+from database.db import get_db, execute_db, query_db
+from services.statutory_service import fetch_gem_bid
 
-def parse_iso(ts_str):
-    if not ts_str:
-        return None
-    try:
-        # Handle trailing Z or offsets
-        clean = ts_str.replace("Z", "+00:00")
-        return datetime.fromisoformat(clean)
-    except Exception:
-        return None
+TENDER_PDF_DIR = os.environ.get("TENDER_PDF_DIR", os.path.join(os.path.dirname(__file__), "..", "uploads", "tenders"))
 
-class TenderService:
-    @staticmethod
-    def calculate_time_remaining(end_iso):
-        """Calculates human-readable time remaining string from now to end_iso."""
-        end_dt = parse_iso(end_iso)
-        if not end_dt:
-            return "EXPIRED"
-        now_dt = datetime.now(timezone.utc)
-        diff = end_dt - now_dt
-        if diff.total_seconds() <= 0:
-            return "EXPIRED"
-        days = diff.days
-        hours = int((diff.total_seconds() % 86400) // 3600)
-        minutes = int((diff.total_seconds() % 3600) // 60)
-        if days > 0:
-            return f"{days} days {hours} hours remaining"
-        elif hours > 0:
-            return f"{hours} hours {minutes} mins remaining"
-        else:
-            return f"{minutes} mins remaining"
+DEFAULT_REQUIREMENT_TEMPLATES = [
+    {"code": "REQ_GST", "title": "Valid GSTIN Registration & Up-to-date Returns", "type": "STATUTORY", "mandatory": 1, "docs": "['GST_CERTIFICATE', 'GST_RETURN']"},
+    {"code": "REQ_PAN", "title": "Permanent Account Number & IT Compliance", "type": "STATUTORY", "mandatory": 1, "docs": "['PAN_CARD', 'ITR']"},
+    {"code": "REQ_TURNOVER", "title": "Minimum Average Annual Turnover", "type": "FINANCIAL", "mandatory": 1, "docs": "['ITR', 'BALANCE_SHEET']"},
+    {"code": "REQ_EXPERIENCE", "title": "Past Project Experience & Completion", "type": "TECHNICAL", "mandatory": 1, "docs": "['EXPERIENCE_CERTIFICATE', 'WORK_ORDER']"},
+    {"code": "REQ_OEM", "title": "OEM Manufacturer Authorization", "type": "TECHNICAL", "mandatory": 1, "docs": "['OEM_AUTHORIZATION']"},
+    {"code": "REQ_MII", "title": "Make in India (MII) Local Content Minimum 50%", "type": "STATUTORY", "mandatory": 1, "docs": "['LOCAL_CONTENT_DECLARATION']"},
+    {"code": "REQ_BIS", "title": "BIS Standards / CRS License Compliance", "type": "TECHNICAL", "mandatory": 0, "docs": "['BIS_CERTIFICATE']"},
+    {"code": "REQ_UDYAM", "title": "MSME / Udyam Registration (Preference Benefit)", "type": "STATUTORY", "mandatory": 0, "docs": "['UDYAM_CERTIFICATE']"},
+    {"code": "REQ_BLACKLIST", "title": "Non-Debarment & Non-Blacklisting Declaration", "type": "STATUTORY", "mandatory": 1, "docs": "['DEBARMENT_DECLARATION']"}
+]
 
-    @staticmethod
-    def create_tender(title, organization, category, description="Procurement specification", estimated_value=10000000,
-                      gem_bid_id=None, bidding_days=5, clarification_days=5,
-                      bid_window_days=None, clarification_window_days=None, pdf_path=None):
-        """Create a new tender record with computed 5-day deadlines."""
-        if bid_window_days is not None:
-            bidding_days = bid_window_days
-        if clarification_window_days is not None:
-            clarification_days = clarification_window_days
-        if not gem_bid_id:
-            import random
-            gem_bid_id = f"GEM/2026/B/{random.randint(1000000, 9999999)}"
+def create_tender(gem_bid_id, title, organization, category, description="", estimated_value=0,
+                  min_turnover=0, min_local_content=50, min_experience_years=3,
+                  min_projects_count=2, min_cumulative_project_value=0,
+                  bid_days=5, created_by=None, pdf_file=None):
+    """
+    Creates a new tender, initializes v1 snapshot, copies/saves PDF if provided, and builds requirement matrix.
+    """
+    os.makedirs(TENDER_PDF_DIR, exist_ok=True)
+    now = datetime.utcnow()
+    end_date = now + timedelta(days=bid_days)
 
-        conn = get_db()
-        cursor = conn.cursor()
-        now_dt = datetime.now(timezone.utc)
-        bidding_end_dt = now_dt + timedelta(days=bidding_days)
-        clarification_start_dt = bidding_end_dt
-        clarification_end_dt = clarification_start_dt + timedelta(days=clarification_days)
+    pdf_storage_name = None
+    pdf_path = None
+    if pdf_file:
+        pdf_storage_name = f"tender_{gem_bid_id.replace('/', '_')}.pdf"
+        pdf_path = os.path.join(TENDER_PDF_DIR, pdf_storage_name)
+        if hasattr(pdf_file, "save"):
+            pdf_file.save(pdf_path)
+        elif isinstance(pdf_file, str) and os.path.exists(pdf_file):
+            shutil.copyfile(pdf_file, pdf_path)
 
-        bidding_start_iso = now_dt.isoformat()
-        bidding_end_iso = bidding_end_dt.isoformat()
-        clarification_start_iso = clarification_start_dt.isoformat()
-        clarification_end_iso = clarification_end_dt.isoformat()
-
-        cursor.execute("""
+    # Insert tender
+    tender_id = execute_db(
+        """
         INSERT INTO tenders (
-            gem_bid_id, title, organization, category, description, estimated_value,
-            status, current_stage, tender_version, pdf_path,
-            bid_window_days, clarification_window_days,
-            bidding_start_at, bidding_end_at, clarification_start_at, clarification_end_at,
-            created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            gem_bid_id, title, organization, category, description, estimated_value,
-            "OPEN_FOR_BIDDING", "BIDDING", pdf_path,
-            bidding_days, clarification_days,
-            bidding_start_iso, bidding_end_iso, clarification_start_iso, clarification_end_iso,
-            bidding_start_iso
-        ))
-        tender_id = cursor.lastrowid
-        conn.commit()
-        conn.close()
-        return tender_id
+            gem_bid_id, title, description, organization, category,
+            status, lifecycle_stage, estimated_value, min_turnover,
+            min_experience_years, min_projects_count, min_cumulative_project_value,
+            min_local_content, bid_start_date, bid_end_date, tender_version,
+            pdf_filename, pdf_storage_path, created_by
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            gem_bid_id, title, description, organization, category,
+            "Published", "OPEN_FOR_BIDDING", estimated_value, min_turnover,
+            min_experience_years, min_projects_count, min_cumulative_project_value,
+            min_local_content, now.isoformat(), end_date.isoformat(), "v1",
+            pdf_storage_name, pdf_path, created_by
+        )
+    )
 
-    @staticmethod
-    def ingest_mock_gem_tender(mock_json_path=None):
+    # Create v1 tender_version record
+    v1_id = execute_db(
         """
-        Imports Mock GeM tender, generates sample tender PDF, extracts clauses,
-        and saves tender requirements.
-        """
-        if not mock_json_path:
-            mock_json_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "mock_api", "gem.json")
-        
-        with open(mock_json_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-
-        record = data["records"][0]
-        gem_bid_id = record["gem_bid_id"]
-
-        conn = get_db()
-        cursor = conn.cursor()
-        cursor.execute("SELECT id FROM tenders WHERE gem_bid_id = ?", (gem_bid_id,))
-        existing = cursor.fetchone()
-        
-        pdf_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "sample_data", "tenders", f"{gem_bid_id.replace('/', '_')}_Tender.pdf")
-        if not os.path.exists(pdf_path):
-            generate_sample_tender_pdf(pdf_path, gem_bid_id)
-
-        if existing:
-            tender_id = existing["id"]
-        else:
-            tender_id = TenderService.create_tender(
-                gem_bid_id=gem_bid_id,
-                title=record["title"],
-                organization=record["organization"],
-                category=record["category"],
-                description=record["description"],
-                estimated_value=record.get("estimated_value", 25000000),
-                bid_window_days=5,
-                clarification_window_days=5,
-                pdf_path=pdf_path
-            )
-
-        # Standard requirements extracted from tender clauses
-        requirements_defs = [
-            {
-                "code": "REQ_GST",
-                "title": "Goods & Services Tax (GST) Registration",
-                "description": "Bidder must possess active GST registration with proof of regular GSTR-1 / GSTR-3B filings.",
-                "is_mandatory": 1,
-                "expected_document_types": ["GST_CERTIFICATE", "GST_RETURN"],
-                "validation_rule": "GST_VALIDITY",
-                "rule_parameters": {"require_returns": True},
-                "source_clause": "Section I, Clause 1.1: Goods & Services Tax (GST) Compliance",
-                "source_clause_page": "1"
-            },
-            {
-                "code": "REQ_PAN",
-                "title": "Permanent Account Number (PAN) Card",
-                "description": "Bidder must possess valid PAN card matching legal entity identity.",
-                "is_mandatory": 1,
-                "expected_document_types": ["PAN"],
-                "validation_rule": "PAN_VALIDITY",
-                "rule_parameters": {},
-                "source_clause": "Section I, Clause 1.2: Permanent Account Number (PAN)",
-                "source_clause_page": "1"
-            },
-            {
-                "code": "REQ_TURNOVER",
-                "title": "Average Annual Financial Turnover (Last 3 FY)",
-                "description": "Average turnover for last 3 financial years must be >= INR 5.00 Crore.",
-                "is_mandatory": 1,
-                "expected_document_types": ["ITR", "FINANCIAL_STATEMENT"],
-                "validation_rule": "TURNOVER_MIN_AVERAGE",
-                "rule_parameters": {"min_avg_turnover": 50000000, "years": 3},
-                "source_clause": "Section II, Clause 2.1: Annual Turnover (3 Financial Years)",
-                "source_clause_page": "2"
-            },
-            {
-                "code": "REQ_EXPERIENCE",
-                "title": "Similar Work Experience (Minimum 3 Projects)",
-                "description": "At least 3 similar completed projects in last 5 years with aggregate contract value >= INR 5.00 Crore.",
-                "is_mandatory": 1,
-                "expected_document_types": ["WORK_ORDER", "COMPLETION_CERTIFICATE"],
-                "validation_rule": "EXPERIENCE_PROJECTS",
-                "rule_parameters": {"min_projects": 3, "min_aggregate_value": 50000000, "lookback_years": 5},
-                "source_clause": "Section II, Clause 2.2: Similar Work Experience",
-                "source_clause_page": "2"
-            },
-            {
-                "code": "REQ_OEM",
-                "title": "Manufacturer Authorization Form (MAF)",
-                "description": "Valid OEM authorization letter verifying manufacturer, bidder, product line, and valid expiry date.",
-                "is_mandatory": 1,
-                "expected_document_types": ["OEM_AUTHORIZATION"],
-                "validation_rule": "OEM_AUTH",
-                "rule_parameters": {"verify_expiry": True},
-                "source_clause": "Section III, Clause 3.1: Manufacturer Authorization (OEM Form)",
-                "source_clause_page": "2"
-            },
-            {
-                "code": "REQ_LOCAL_CONTENT",
-                "title": "Make in India (MII) Local Content Declaration",
-                "description": "Minimum local content percentage must be >= 50% (Class-I Local Supplier).",
-                "is_mandatory": 1,
-                "expected_document_types": ["LOCAL_CONTENT_DECLARATION"],
-                "validation_rule": "LOCAL_CONTENT_PCT",
-                "rule_parameters": {"min_local_content_pct": 50.0},
-                "source_clause": "Section III, Clause 3.3: Make in India (MII) Preference",
-                "source_clause_page": "2"
-            },
-            {
-                "code": "REQ_BIS",
-                "title": "Bureau of Indian Standards (BIS) Registration",
-                "description": "Equipment must conform to BIS / CRS safety registration standards.",
-                "is_mandatory": 0,
-                "expected_document_types": ["BIS"],
-                "validation_rule": "BIS_LICENSE",
-                "rule_parameters": {},
-                "source_clause": "Section III, Clause 3.2: Bureau of Indian Standards (BIS) Certification",
-                "source_clause_page": "2"
-            },
-            {
-                "code": "REQ_BLACKLIST",
-                "title": "Non-Debarment / Integrity Undertaking",
-                "description": "Bidder must not be blacklisted or debarred by any government authority.",
-                "is_mandatory": 1,
-                "expected_document_types": ["OTHER", "LOCAL_CONTENT_DECLARATION"],
-                "validation_rule": "BLACKLIST_CHECK",
-                "rule_parameters": {},
-                "source_clause": "Section IV, Clause 4.1: Non-Debarment Undertaking",
-                "source_clause_page": "2"
-            }
-        ]
-
-        # Insert requirements if not already present
-        for req in requirements_defs:
-            cursor.execute("SELECT id FROM tender_requirements WHERE tender_id = ? AND code = ?", (tender_id, req["code"]))
-            if not cursor.fetchone():
-                cursor.execute("""
-                INSERT INTO tender_requirements (
-                    tender_id, tender_version, code, title, description, is_mandatory,
-                    expected_document_types, validation_rule, rule_parameters,
-                    source_clause, source_clause_page
-                ) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    tender_id, req["code"], req["title"], req["description"], req["is_mandatory"],
-                    json.dumps(req["expected_document_types"]), req["validation_rule"],
-                    json.dumps(req["rule_parameters"]), req["source_clause"], req["source_clause_page"]
-                ))
-
-        conn.commit()
-        conn.close()
-        return tender_id
-
-    @staticmethod
-    def get_tender_detail(tender_id):
-        """Retrieve full tender details, timeline, assigned officers, and requirements."""
-        conn = get_db()
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM tenders WHERE id = ?", (tender_id,))
-        tender_row = cursor.fetchone()
-        if not tender_row:
-            conn.close()
-            return None
-        tender = dict(tender_row)
-
-        # Assigned officers
-        cursor.execute("""
-        SELECT u.id, u.username, u.full_name, u.email, a.assigned_at
-        FROM tender_officer_assignments a
-        JOIN users u ON a.officer_id = u.id
-        WHERE a.tender_id = ?
-        """, (tender_id,))
-        tender["assigned_officers"] = [dict(r) for r in cursor.fetchall()]
-
-        # Requirements
-        cursor.execute("""
-        SELECT * FROM tender_requirements
-        WHERE tender_id = ? AND tender_version = ?
-        ORDER BY is_mandatory DESC, id ASC
-        """, (tender_id, tender.get("tender_version", 1)))
-        reqs = []
-        for r in cursor.fetchall():
-            rd = dict(r)
-            rd["expected_document_types"] = json.loads(rd["expected_document_types"])
-            rd["rule_parameters"] = json.loads(rd["rule_parameters"]) if rd.get("rule_parameters") else {}
-            reqs.append(rd)
-        tender["requirements"] = reqs
-
-        # Bidder count
-        cursor.execute("SELECT COUNT(*) as count FROM bid_submissions WHERE tender_id = ?", (tender_id,))
-        tender["bidder_count"] = cursor.fetchone()["count"]
-
-        # Time remaining strings
-        tender["bidding_time_remaining"] = TenderService.calculate_time_remaining(tender.get("bidding_end_at"))
-        tender["clarification_time_remaining"] = TenderService.calculate_time_remaining(tender.get("clarification_end_at"))
-
-        conn.close()
-        return tender
-
-    @staticmethod
-    def close_bidding_early(tender_id, officer_id, reason="Early closure by procurement officer"):
-        """
-        Officer closes bidding early.
-        1. actual_bidding_closed_at = current UTC timestamp
-        2. status moves to CLARIFICATION
-        3. clarification_start_at = actual_bidding_closed_at
-        4. clarification_end_at = clarification_start_at + clarification_window_days
-        5. Audit log recorded.
-        """
-        conn = get_db()
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM tenders WHERE id = ?", (tender_id,))
-        t = cursor.fetchone()
-        if not t:
-            conn.close()
-            return False, "Tender not found"
-
-        now_dt = datetime.now(timezone.utc)
-        now_iso = now_dt.isoformat()
-        clar_window = t["clarification_window_days"] or 5
-        clar_end_dt = now_dt + timedelta(days=clar_window)
-        clar_end_iso = clar_end_dt.isoformat()
-
-        cursor.execute("""
-        UPDATE tenders
-        SET actual_bidding_closed_at = ?,
-            status = 'CLARIFICATION',
-            current_stage = 'CLARIFICATION',
-            clarification_start_at = ?,
-            clarification_end_at = ?
-        WHERE id = ?
-        """, (now_iso, now_iso, clar_end_iso, tender_id))
-
-        # Log audit
-        cursor.execute("""
-        INSERT INTO audit_logs (user_id, user_role, action, entity_type, entity_id, details_json, timestamp)
-        VALUES (?, 'officer', 'EARLY_BIDDING_CLOSURE', 'tender', ?, ?, ?)
-        """, (
-            officer_id, tender_id,
-            json.dumps({
-                "previous_status": t["status"],
-                "new_status": "CLARIFICATION",
-                "reason": reason,
-                "actual_bidding_closed_at": now_iso,
-                "new_clarification_end_at": clar_end_iso
-            }),
-            now_iso
-        ))
-
-        conn.commit()
-        conn.close()
-        return True, "Bidding closed early. Clarification window activated."
-
-    @staticmethod
-    def close_clarification_early(tender_id, officer_id, reason="Clarification closed early by procurement officer"):
-        """
-        Officer closes clarification window early.
-        1. actual_clarification_closed_at = current UTC timestamp
-        2. status moves to OFFICER_REVIEW
-        3. Audit log recorded.
-        """
-        conn = get_db()
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM tenders WHERE id = ?", (tender_id,))
-        t = cursor.fetchone()
-        if not t:
-            conn.close()
-            return False, "Tender not found"
-
-        now_iso = utc_now_iso()
-        cursor.execute("""
-        UPDATE tenders
-        SET actual_clarification_closed_at = ?,
-            status = 'OFFICER_REVIEW',
-            current_stage = 'OFFICER_REVIEW'
-        WHERE id = ?
-        """, (now_iso, tender_id))
-
-        # Log audit
-        cursor.execute("""
-        INSERT INTO audit_logs (user_id, user_role, action, entity_type, entity_id, details_json, timestamp)
-        VALUES (?, 'officer', 'EARLY_CLARIFICATION_CLOSURE', 'tender', ?, ?, ?)
-        """, (
-            officer_id, tender_id,
-            json.dumps({
-                "previous_status": t["status"],
-                "new_status": "OFFICER_REVIEW",
-                "reason": reason,
-                "actual_clarification_closed_at": now_iso
-            }),
-            now_iso
-        ))
-
-        conn.commit()
-        conn.close()
-        return True, "Clarification closed early. Tender moved to Officer Review."
-
-    @staticmethod
-    def create_corrigendum(tender_id, officer_id, reason, updated_metadata=None, updated_requirements=None):
-        """
-        Creates a new tender version / corrigendum:
-        1. Snapshots old version into tender_versions.
-        2. Increments tender_version.
-        3. Updates requirements for new version.
-        4. Marks existing bid_submissions as NEEDS_REEVALUATION.
-        """
-        conn = get_db()
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM tenders WHERE id = ?", (tender_id,))
-        t = cursor.fetchone()
-        if not t:
-            conn.close()
-            return False, "Tender not found"
-
-        old_version = t["tender_version"]
-        new_version = old_version + 1
-        now_iso = utc_now_iso()
-
-        # Fetch current requirements for snapshot
-        cursor.execute("SELECT * FROM tender_requirements WHERE tender_id = ? AND tender_version = ?", (tender_id, old_version))
-        req_rows = [dict(r) for r in cursor.fetchall()]
-
-        # Insert snapshot into tender_versions
-        cursor.execute("""
         INSERT INTO tender_versions (
-            tender_id, version_number, metadata_json, requirements_json,
-            pdf_path, corrigendum_reason, created_by, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            tender_id, old_version,
-            json.dumps(dict(t)), json.dumps(req_rows),
-            t["pdf_path"], reason, officer_id, now_iso
-        ))
+            tender_id, version_tag, corrigendum_reason, changes_summary, officer_id
+        ) VALUES (?, ?, ?, ?, ?)
+        """,
+        (tender_id, "v1", "Initial tender publication", "Original tender requirements created.", created_by)
+    )
 
-        # Update tender row version
-        cursor.execute("UPDATE tenders SET tender_version = ? WHERE id = ?", (new_version, tender_id))
+    # Create default structured requirements
+    for tmpl in DEFAULT_REQUIREMENT_TEMPLATES:
+        threshold = None
+        unit = None
+        if tmpl["code"] == "REQ_TURNOVER":
+            threshold = min_turnover
+            unit = "INR"
+        elif tmpl["code"] == "REQ_MII":
+            threshold = min_local_content
+            unit = "PERCENT"
+        elif tmpl["code"] == "REQ_EXPERIENCE":
+            threshold = min_projects_count
+            unit = "PROJECTS"
 
-        # Re-insert requirements under new_version (applying any updates if given)
-        for req in req_rows:
-            cursor.execute("""
-            INSERT INTO tender_requirements (
-                tender_id, tender_version, code, title, description, is_mandatory,
-                expected_document_types, validation_rule, rule_parameters,
-                source_clause, source_clause_page
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                tender_id, new_version, req["code"], req["title"], req["description"],
-                req["is_mandatory"], req["expected_document_types"], req["validation_rule"],
-                req["rule_parameters"], req["source_clause"], req["source_clause_page"]
-            ))
+        execute_db(
+            """
+            INSERT INTO requirements (
+                tender_id, tender_version_id, code, title, description,
+                requirement_type, is_mandatory, threshold_value, threshold_unit, expected_doc_types
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                tender_id, v1_id, tmpl["code"], tmpl["title"],
+                f"Tender compliance check for {tmpl['title']}",
+                tmpl["type"], tmpl["mandatory"], threshold, unit, tmpl["docs"]
+            )
+        )
 
-        # Mark existing bidder submissions as NEEDS_REEVALUATION
-        cursor.execute("""
-        UPDATE bid_submissions
-        SET status = 'RE_VERIFICATION',
-            eligibility_recommendation = 'NEEDS_REVIEW'
-        WHERE tender_id = ?
-        """, (tender_id,))
+    return tender_id
 
-        # Log audit
-        cursor.execute("""
-        INSERT INTO audit_logs (user_id, user_role, action, entity_type, entity_id, details_json, timestamp)
-        VALUES (?, 'officer', 'CORRIGENDUM_ISSUED', 'tender', ?, ?, ?)
-        """, (
-            officer_id, tender_id,
-            json.dumps({
-                "old_version": old_version,
-                "new_version": new_version,
-                "reason": reason
-            }),
-            now_iso
-        ))
+def import_tender_from_gem(gem_bid_id, officer_id=None):
+    """
+    Imports tender details from GeM API or mock fixture.
+    """
+    gem_res = fetch_gem_bid(gem_bid_id)
+    if not gem_res.get("is_valid") or not gem_res.get("data"):
+        raise ValueError(f"Could not find GeM Bid: {gem_bid_id}")
 
-        conn.commit()
-        conn.close()
-        return True, f"Corrigendum issued successfully. Version {new_version} activated."
+    data = gem_res["data"]
+    # Check sample tender PDF if available
+    sample_pdf = os.path.join(os.path.dirname(__file__), "..", "sample_data", "tenders", "GEM_2026_B_1234567_Tender.pdf")
+    pdf_to_use = sample_pdf if os.path.exists(sample_pdf) else None
 
-    @staticmethod
-    def validate_bidder_submission_allowed(tender_id):
+    tender_id = create_tender(
+        gem_bid_id=data.get("gem_bid_id", gem_bid_id),
+        title=data.get("title", "Government e-Marketplace Procurement"),
+        organization=data.get("organization", "Central Procurement Entity"),
+        category=data.get("category", "Goods & Services"),
+        description=data.get("description", "Imported from GeM portal."),
+        estimated_value=float(data.get("estimated_value", 25000000)),
+        min_turnover=50000000,
+        min_local_content=50,
+        min_projects_count=2,
+        min_cumulative_project_value=10000000,
+        bid_days=7,
+        created_by=officer_id,
+        pdf_file=pdf_to_use
+    )
+    return tender_id
+
+def is_bidding_open(tender_id):
+    """
+    Server-side bidding deadline & lifecycle check.
+    Returns (is_open: bool, message: str)
+    """
+    tender = query_db("SELECT * FROM tenders WHERE id = ?", (tender_id,), one=True)
+    if not tender:
+        return False, "Tender not found."
+
+    if tender["lifecycle_stage"] != "OPEN_FOR_BIDDING":
+        return False, f"Bidding is closed. Tender is currently in {tender['lifecycle_stage']} stage."
+
+    if tender["bid_end_date"]:
+        try:
+            end_dt = datetime.fromisoformat(tender["bid_end_date"])
+            if datetime.utcnow() > end_dt:
+                return False, f"Bidding deadline passed on {end_dt.strftime('%Y-%m-%d %H:%M UTC')}. Late bids rejected."
+        except Exception:
+            pass
+
+    return True, "Bidding is open."
+
+def update_tender_lifecycle_stage(tender_id, new_stage, officer_id):
+    """
+    Transitions tender lifecycle stage (OPEN_FOR_BIDDING -> CLARIFICATION -> OFFICER_REVIEW -> DECIDED).
+    """
+    valid_stages = ("OPEN_FOR_BIDDING", "CLARIFICATION", "OFFICER_REVIEW", "DECIDED")
+    if new_stage not in valid_stages:
+        raise ValueError(f"Invalid lifecycle stage: {new_stage}")
+
+    execute_db(
+        "UPDATE tenders SET lifecycle_stage = ? WHERE id = ?",
+        (new_stage, tender_id)
+    )
+
+def create_corrigendum(tender_id, officer_id, reason, updated_description=None, updated_turnover=None, updated_local_content=None):
+    """
+    Publishes a corrigendum creating a new tender version.
+    Preserves all historical tender rows, snapshots, and previous requirements.
+    """
+    tender = query_db("SELECT * FROM tenders WHERE id = ?", (tender_id,), one=True)
+    if not tender:
+        raise ValueError("Tender not found.")
+
+    current_ver = tender["tender_version"] or "v1"
+    match = re.search(r"v(\d+)", current_ver)
+    next_num = int(match.group(1)) + 1 if match else 2
+    new_version_tag = f"v{next_num}"
+
+    # Record version
+    changes = []
+    if updated_description and updated_description != tender["description"]:
+        changes.append(f"Description updated: {updated_description[:50]}...")
+    if updated_turnover and float(updated_turnover) != tender["min_turnover"]:
+        changes.append(f"Turnover threshold updated to INR {float(updated_turnover):,.2f}")
+    if updated_local_content and float(updated_local_content) != tender["min_local_content"]:
+        changes.append(f"Local content threshold updated to {float(updated_local_content)}%")
+
+    changes_summary = "; ".join(changes) if changes else "Corrigendum published with tender clause adjustments."
+
+    version_id = execute_db(
         """
-        Server-side check:
-        1. Tender must exist.
-        2. Status must be 'OPEN_FOR_BIDDING'.
-        3. Current UTC timestamp must be < bidding_end_at.
-        Returns: (is_allowed: bool, message: str)
+        INSERT INTO tender_versions (
+            tender_id, version_tag, corrigendum_reason, changes_summary, officer_id
+        ) VALUES (?, ?, ?, ?, ?)
+        """,
+        (tender_id, new_version_tag, reason, changes_summary, officer_id)
+    )
+
+    # Update current tender
+    execute_db(
         """
-        conn = get_db()
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM tenders WHERE id = ?", (tender_id,))
-        t = cursor.fetchone()
-        conn.close()
+        UPDATE tenders SET
+            tender_version = ?,
+            description = COALESCE(?, description),
+            min_turnover = COALESCE(?, min_turnover),
+            min_local_content = COALESCE(?, min_local_content)
+        WHERE id = ?
+        """,
+        (
+            new_version_tag,
+            updated_description,
+            float(updated_turnover) if updated_turnover else None,
+            float(updated_local_content) if updated_local_content else None,
+            tender_id
+        )
+    )
 
-        if not t:
-            return False, "Tender does not exist."
+    # Re-associate/copy requirements under new version tag
+    old_reqs = query_db("SELECT * FROM requirements WHERE tender_id = ?", (tender_id,))
+    for req in old_reqs:
+        t_val = req["threshold_value"]
+        if req["code"] == "REQ_TURNOVER" and updated_turnover:
+            t_val = float(updated_turnover)
+        elif req["code"] == "REQ_MII" and updated_local_content:
+            t_val = float(updated_local_content)
 
-        if t["status"] != "OPEN_FOR_BIDDING":
-            return False, f"Bidding is not open for this tender. Current status: {t['status']}."
+        execute_db(
+            """
+            INSERT INTO requirements (
+                tender_id, tender_version_id, code, title, description,
+                requirement_type, is_mandatory, threshold_value, threshold_unit, expected_doc_types
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                tender_id, version_id, req["code"], req["title"], req["description"],
+                req["requirement_type"], req["is_mandatory"], t_val, req["threshold_unit"], req["expected_doc_types"]
+            )
+        )
 
-        end_dt = parse_iso(t["bidding_end_at"])
-        if end_dt and datetime.now(timezone.utc) > end_dt:
-            return False, "Bidding submission deadline has expired. Submissions are rejected."
-
-        return True, "Bidding is open."
-
-    @staticmethod
-    def validate_clarification_submission_allowed(tender_id):
-        """
-        Server-side check for clarification submission:
-        Current UTC timestamp must be <= clarification_end_at.
-        """
-        conn = get_db()
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM tenders WHERE id = ?", (tender_id,))
-        t = cursor.fetchone()
-        conn.close()
-
-        if not t:
-            return False, "Tender does not exist."
-
-        end_dt = parse_iso(t["clarification_end_at"])
-        if end_dt and datetime.now(timezone.utc) > end_dt:
-            return False, "Clarification window has expired. Submissions are rejected."
-
-        return True, "Clarification is open."
+    return new_version_tag

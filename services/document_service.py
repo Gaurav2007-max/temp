@@ -1,177 +1,172 @@
-"""Document management service: multi-document handling, secure storage,
-classification, quality check, page-level field extraction, and authorization.
-"""
 import os
-import re
+import uuid
 import json
 from werkzeug.utils import secure_filename
-from database.db import get_db, utc_now_iso
-from services.pdf_service import extract_pdf_pages_and_text
-from services.llm_service import llm_service
+from database.db import get_db, execute_db, query_db
+from services.pdf_service import extract_pdf_content
+from services.llm_service import extract_document_fields_llm
 
-UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads")
-ALLOWED_EXTENSIONS = {"pdf", "txt", "png", "jpg", "jpeg"}
+UPLOAD_DIR = os.environ.get("UPLOAD_DIR", os.path.join(os.path.dirname(__file__), "..", "uploads", "documents"))
 
-def allowed_file(filename):
-    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+DOC_TYPE_REQUIREMENT_MAP = {
+    "REQ_GST": ["GST_CERTIFICATE", "GST_RETURN"],
+    "REQ_PAN": ["PAN_CARD", "ITR"],
+    "REQ_TURNOVER": ["ITR", "BALANCE_SHEET", "ANNUAL_RETURN"],
+    "REQ_EXPERIENCE": ["EXPERIENCE_CERTIFICATE", "WORK_ORDER", "COMPLETION_CERTIFICATE"],
+    "REQ_OEM": ["OEM_AUTHORIZATION"],
+    "REQ_BIS": ["BIS_CERTIFICATE", "BIS_LICENSE"],
+    "REQ_MII": ["LOCAL_CONTENT_DECLARATION", "MII_CERTIFICATE"],
+    "REQ_UDYAM": ["UDYAM_CERTIFICATE", "MSME_CERTIFICATE"],
+    "REQ_EPFO": ["EPFO_CHALLAN", "EPFO_RETURN"],
+    "REQ_ESIC": ["ESIC_CHALLAN", "ESIC_RETURN"],
+    "REQ_STARTUP": ["STARTUP_CERTIFICATE"],
+    "REQ_NSIC": ["NSIC_CERTIFICATE"]
+}
 
-class DocumentService:
-    @staticmethod
-    def process_uploaded_document(file_obj, bidder_id, tender_id, submission_id=None, clarification_id=None, verification_version=1):
-        """
-        Processes an individual uploaded document file object:
-        1. Validates and saves to secure disk path.
-        2. Extracts text and page mapping (pypdf for PDF, decode for text).
-        3. Classifies document independently (with confidence).
-        4. Evaluates quality status.
-        5. Extracts page-level fields and stores them in document_extracted_fields.
-        6. Inserts independent document record in documents table.
-        Returns document dict.
-        """
-        raw_filename = file_obj.filename
-        if not raw_filename or not allowed_file(raw_filename):
-            return None
+def detect_document_type(filename, text=""):
+    """
+    Infers document type from filename and text content patterns.
+    """
+    name = (filename or "").upper()
+    t = (text or "").upper()
 
-        clean_name = secure_filename(raw_filename)
-        timestamp_prefix = utc_now_iso().replace(":", "-").replace(".", "-")
-        saved_filename = f"{bidder_id}_{timestamp_prefix}_{clean_name}"
-        
-        target_dir = os.path.join(UPLOAD_FOLDER, f"bidder_{bidder_id}")
-        os.makedirs(target_dir, exist_ok=True)
-        disk_path = os.path.join(target_dir, saved_filename)
-        file_obj.save(disk_path)
+    if "GST" in name or "GSTIN" in name:
+        if "RETURN" in name or "GSTR" in name or "GSTR1" in name or "GSTR3B" in name or "GSTR" in t:
+            return "GST_RETURN"
+        return "GST_CERTIFICATE"
 
-        # Extract text & pages
-        ext = clean_name.rsplit(".", 1)[1].lower()
-        pages_dict = {}
-        extracted_text = ""
-        
-        if ext == "pdf":
-            _, extracted_text, pages_dict = extract_pdf_pages_and_text(disk_path)
-        else:
-            try:
-                with open(disk_path, "r", encoding="utf-8", errors="ignore") as f:
-                    extracted_text = f.read()
-                pages_dict = {1: extracted_text}
-            except Exception:
-                extracted_text = ""
-                pages_dict = {}
+    if "PAN" in name or "PERMANENT ACCOUNT NUMBER" in t:
+        return "PAN_CARD"
 
-        # Classify document
-        doc_type, confidence, source = llm_service.classify_document(clean_name, extracted_text)
-        
-        # Assess quality
-        quality_status, quality_details = llm_service.assess_document_quality(clean_name, extracted_text)
+    if "ITR" in name or "INCOME TAX RETURN" in t or "ACKNOWLEDGEMENT" in name:
+        return "ITR"
 
-        # Extract page-level fields
-        extracted_fields_list = llm_service.extract_fields(clean_name, extracted_text, pages_dict)
+    if "OEM" in name or "MANUFACTURER" in name or "AUTHORIZATION" in name or "MANUFACTURER'S AUTHORIZATION" in t:
+        return "OEM_AUTHORIZATION"
 
-        # Persist document record
-        conn = get_db()
-        cursor = conn.cursor()
-        now = utc_now_iso()
+    if "BIS" in name or "BUREAU OF INDIAN STANDARDS" in t or "CRS" in name:
+        return "BIS_CERTIFICATE"
 
-        cursor.execute("""
-        INSERT INTO documents (
-            bidder_id, submission_id, tender_id, filename, secure_filepath,
-            document_type, upload_timestamp, document_version, clarification_id,
-            verification_version, quality_status, quality_details, extracted_text,
-            extracted_fields, classification_confidence, is_active
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-        """, (
-            bidder_id, submission_id, tender_id, clean_name, disk_path,
-            doc_type, now, 1, clarification_id,
-            verification_version, quality_status, quality_details, extracted_text,
-            json.dumps(extracted_fields_list), confidence
-        ))
-        doc_id = cursor.lastrowid
+    if "LOCAL" in name or "MII" in name or "MAKE IN INDIA" in name or "LOCAL CONTENT" in t:
+        return "LOCAL_CONTENT_DECLARATION"
 
-        # Insert page-level evidence records
-        for f in extracted_fields_list:
-            p_num = f.get("page_number", "UNKNOWN")
-            cursor.execute("""
-            INSERT INTO document_extracted_fields (
-                document_id, filename, page_number, field_name, value, source, confidence, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                doc_id, clean_name, p_num, f.get("field_name"), f.get("value"),
-                f.get("source", "OCR"), f.get("confidence", 0.9), now
-            ))
+    if "UDYAM" in name or "MSME" in name or "UDYAM REGISTRATION" in t:
+        return "UDYAM_CERTIFICATE"
 
-        conn.commit()
-        conn.close()
+    if "EXPERIENCE" in name or "COMPLETION" in name or "WORK ORDER" in name or "COMPLETION CERTIFICATE" in t:
+        return "EXPERIENCE_CERTIFICATE"
 
-        return {
+    if "EPFO" in name or "PROVIDENT FUND" in t or "ECR" in name:
+        return "EPFO_CHALLAN"
+
+    if "ESIC" in name or "EMPLOYEES' STATE INSURANCE" in t:
+        return "ESIC_CHALLAN"
+
+    if "STARTUP" in name or "DIPP" in name or "DPIIT" in t:
+        return "STARTUP_CERTIFICATE"
+
+    if "NSIC" in name:
+        return "NSIC_CERTIFICATE"
+
+    return "OTHER"
+
+def validate_doc_type_for_requirement(requirement_code, doc_type):
+    """
+    Checks if a document type is valid for a given requirement code.
+    Returns (is_valid, warning_or_issue_text).
+    """
+    expected = DOC_TYPE_REQUIREMENT_MAP.get(requirement_code)
+    if not expected:
+        return True, None
+
+    if doc_type in expected:
+        return True, None
+
+    # Mismatch detected
+    return False, f"Document type '{doc_type}' may not satisfy requirement '{requirement_code}'. Expected one of: {', '.join(expected)}."
+
+def save_and_process_uploaded_documents(bidder_id, tender_id, files_list, is_supplementary=0, clarification_id=None):
+    """
+    Processes multiple files uploaded by a bidder.
+    Each file becomes an independent record in the 'documents' table.
+    """
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    saved_docs = []
+
+    for file_obj in files_list:
+        if not file_obj or not file_obj.filename:
+            continue
+
+        orig_name = secure_filename(file_obj.filename)
+        if not orig_name:
+            orig_name = f"doc_{uuid.uuid4().hex[:8]}.pdf"
+
+        unique_prefix = f"bid_{bidder_id}_t{tender_id}_{uuid.uuid4().hex[:8]}"
+        storage_name = f"{unique_prefix}_{orig_name}"
+        storage_path = os.path.join(UPLOAD_DIR, storage_name)
+
+        # Save physical file
+        file_obj.save(storage_path)
+        file_size = os.path.getsize(storage_path)
+
+        # Process PDF content & OCR
+        pdf_res = extract_pdf_content(storage_path)
+        text = pdf_res.get("full_text", "")
+        pages = pdf_res.get("pages", [])
+
+        # Detect document type
+        inferred_type = detect_document_type(orig_name, text)
+
+        # Extract structured fields using LLM / deterministic fallback
+        fields = extract_document_fields_llm(inferred_type, text)
+        if pages:
+            fields["_page_count"] = len(pages)
+
+        # Insert independent document record
+        doc_id = execute_db(
+            """
+            INSERT INTO documents (
+                bidder_id, tender_id, original_filename, storage_filename, storage_path,
+                file_size, mime_type, doc_type, is_supplementary, clarification_id,
+                extracted_text, extracted_fields, ocr_status, ocr_confidence, ocr_quality, page_count
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                bidder_id, tender_id, orig_name, storage_name, storage_path,
+                file_size, file_obj.content_type or "application/pdf", inferred_type,
+                is_supplementary, clarification_id,
+                text, json.dumps(fields),
+                pdf_res.get("ocr_status", "VALID"),
+                pdf_res.get("ocr_confidence", 1.0),
+                pdf_res.get("ocr_quality", "HIGH"),
+                pdf_res.get("page_count", 1)
+            )
+        )
+
+        saved_docs.append({
             "id": doc_id,
-            "filename": clean_name,
-            "document_type": doc_type,
-            "classification_confidence": confidence,
-            "quality_status": quality_status,
-            "extracted_fields": extracted_fields_list
-        }
+            "original_filename": orig_name,
+            "doc_type": inferred_type,
+            "storage_name": storage_name,
+            "extracted_fields": fields,
+            "ocr_status": pdf_res.get("ocr_status", "VALID"),
+            "ocr_confidence": pdf_res.get("ocr_confidence", 1.0),
+            "page_count": pdf_res.get("page_count", 1)
+        })
 
-    @staticmethod
-    def get_document_by_id(doc_id):
-        """Retrieve document record by ID."""
-        conn = get_db()
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM documents WHERE id = ?", (doc_id,))
-        row = cursor.fetchone()
-        conn.close()
-        return dict(row) if row else None
+    return saved_docs
 
-    @staticmethod
-    def get_extracted_fields_for_document(doc_id):
-        """Retrieve page-level extracted fields for document ID."""
-        conn = get_db()
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM document_extracted_fields WHERE document_id = ?", (doc_id,))
-        rows = cursor.fetchall()
-        conn.close()
-        return [dict(r) for r in rows]
-
-    @staticmethod
-    def authorize_document_access(user, doc_id):
-        """
-        Authorizes access to document file:
-        - Admin: full access
-        - Officer: access if assigned to tender
-        - Bidder: access only if own document
-        """
-        if not user:
-            return False, "Not authenticated"
-        
-        doc = DocumentService.get_document_by_id(doc_id)
-        if not doc:
-            return False, "Document not found"
-
-        role = user.get("role")
-        if role == "admin":
-            return True, doc
-
-        conn = get_db()
-        cursor = conn.cursor()
-
-        if role == "officer":
-            # Must be assigned to tender
-            cursor.execute("""
-            SELECT 1 FROM tender_officer_assignments
-            WHERE tender_id = ? AND officer_id = ?
-            """, (doc["tender_id"], user["id"]))
-            assigned = cursor.fetchone()
-            conn.close()
-            if assigned:
-                return True, doc
-            return False, "Procurement officer is not assigned to this tender"
-
-        if role == "bidder":
-            # Must match bidder record
-            cursor.execute("SELECT id FROM bidders WHERE user_id = ?", (user["id"],))
-            bidder_row = cursor.fetchone()
-            conn.close()
-            if bidder_row and bidder_row["id"] == doc["bidder_id"]:
-                return True, doc
-            return False, "Bidder cannot access another bidder's documents"
-
-        conn.close()
-        return False, "Unauthorized role"
+def get_documents_by_bidder_and_tender(bidder_id, tender_id):
+    rows = query_db(
+        "SELECT * FROM documents WHERE bidder_id = ? AND tender_id = ? ORDER BY id ASC",
+        (bidder_id, tender_id)
+    )
+    docs = []
+    for r in rows:
+        d = dict(r)
+        try:
+            d["fields"] = json.loads(d.get("extracted_fields") or "{}")
+        except Exception:
+            d["fields"] = {}
+        docs.append(d)
+    return docs

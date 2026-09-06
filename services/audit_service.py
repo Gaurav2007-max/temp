@@ -1,98 +1,52 @@
-"""Audit logging service for tracking all lifecycle transitions and officer actions."""
-import json
-from database.db import get_db, utc_now_iso
+from flask import request
+from database.db import get_db, execute_db, query_db
 
-class AuditService:
-    @staticmethod
-    def log(user_id, user_role, action, entity_type, entity_id, details=None):
-        """Append an event to the immutable audit log."""
-        conn = get_db()
-        cursor = conn.cursor()
-        now_iso = utc_now_iso()
-        details_str = json.dumps(details) if isinstance(details, (dict, list)) else (details or "{}")
+def log_audit_event(action, resource_type, resource_id=None, details=None, actor=None):
+    """
+    Appends an immutable audit log entry for security and compliance tracking.
+    """
+    actor_id = None
+    actor_name = "System"
+    actor_role = "system"
 
-        cursor.execute("""
-        INSERT INTO audit_logs (user_id, user_role, action, entity_type, entity_id, details_json, timestamp)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (user_id, user_role, action, entity_type, entity_id, details_str, now_iso))
-        
-        log_id = cursor.lastrowid
-        conn.commit()
-        conn.close()
-        return log_id
+    if actor:
+        try:
+            # Handle sqlite3.Row, dict, or custom mapping
+            actor_id = actor["id"]
+            actor_name = actor["name"] if "name" in actor.keys() else actor["username"]
+            actor_role = actor["role"]
+        except Exception:
+            actor_id = getattr(actor, "id", None)
+            actor_name = getattr(actor, "name", getattr(actor, "username", "System"))
+            actor_role = getattr(actor, "role", "system")
+    else:
+        try:
+            from flask import session
+            if "user_id" in session:
+                actor_id = session.get("user_id")
+                actor_name = session.get("user_name", "System")
+                actor_role = session.get("user_role", "system")
+        except Exception:
+            pass
 
-    @staticmethod
-    def get_logs_for_tender(tender_id, limit=50):
-        """Get audit trail for a specific tender."""
-        return AuditService.query_logs(tender_id=tender_id, limit=limit)
+    ip_address = None
+    try:
+        if request:
+            ip_address = request.headers.get("X-Forwarded-For", request.remote_addr)
+    except Exception:
+        pass
 
-    @staticmethod
-    def query_logs(tender_id=None, submission_id=None, event_type=None, start_date=None, end_date=None, limit=100):
-        """Query immutable audit trail by tender, submission, event type, and date range."""
-        conn = get_db()
-        cursor = conn.cursor()
-
-        query = """
-        SELECT a.*, u.username, u.full_name
-        FROM audit_logs a
-        LEFT JOIN users u ON a.user_id = u.id
-        WHERE 1=1
+    execute_db(
         """
-        params = []
+        INSERT INTO audit_logs (
+            actor_id, actor_name, actor_role, action, resource_type, resource_id, details, ip_address
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (actor_id, actor_name, actor_role, action, resource_type, str(resource_id) if resource_id else None, details, ip_address)
+    )
 
-        if tender_id:
-            query += ' AND ((a.entity_type = "tender" AND a.entity_id = ?) OR a.details_json LIKE ?)'
-            params.extend([tender_id, f'%"tender_id": {tender_id}%'])
-
-        if submission_id:
-            query += ' AND ((a.entity_type = "submission" AND a.entity_id = ?) OR a.details_json LIKE ?)'
-            params.extend([submission_id, f'%"submission_id": {submission_id}%'])
-
-        if event_type:
-            query += ' AND a.action = ?'
-            params.append(event_type)
-
-        if start_date:
-            query += ' AND a.timestamp >= ?'
-            params.append(start_date)
-
-        if end_date:
-            query += ' AND a.timestamp <= ?'
-            params.append(end_date)
-
-        query += " ORDER BY a.id DESC LIMIT ?"
-        params.append(limit)
-
-        cursor.execute(query, tuple(params))
-        rows = [dict(r) for r in cursor.fetchall()]
-        conn.close()
-        return rows
-
-    @staticmethod
-    def export_logs_json(tender_id=None):
-        """Export audit trail in structured JSON format."""
-        logs = AuditService.query_logs(tender_id=tender_id, limit=5000)
-        return json.dumps(logs, indent=2)
-
-    @staticmethod
-    def export_logs_csv(tender_id=None):
-        """Export audit trail in RFC 4180 compliant CSV format."""
-        import io
-        import csv
-        logs = AuditService.query_logs(tender_id=tender_id, limit=5000)
-        output = io.StringIO()
-        writer = csv.writer(output)
-        writer.writerow(["ID", "Timestamp_UTC", "Actor_ID", "Actor_Username", "Actor_Role", "Action_Event", "Entity_Type", "Entity_ID", "Details_JSON"])
-        for r in logs:
-            writer.writerow([
-                r.get("id"),
-                r.get("timestamp"),
-                r.get("user_id"),
-                r.get("username") or "system",
-                r.get("user_role") or "system",
-                r.get("action"),
-                r.get("entity_type"),
-                r.get("entity_id"),
-                r.get("details_json")
-            ])
-        return output.getvalue()
+def get_recent_audit_logs(limit=50):
+    return query_db(
+        "SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT ?",
+        (limit,)
+    )

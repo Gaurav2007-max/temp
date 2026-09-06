@@ -1,238 +1,377 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Executive Compliance Verification Report • {{ bidder.legal_name }}</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        @media print {
-            .no-print { display: none !important; }
-            body { background: white !important; font-size: 11pt; }
-            .page-break { page-break-after: always; }
-        }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
-    </style>
-</head>
-<body class="bg-slate-100 text-slate-900 min-h-screen py-8 px-4">
+{% extends "base.html" %}
 
-    <!-- Action Bar (Hidden on Print) -->
-    <div class="max-w-4xl mx-auto mb-6 flex justify-between items-center no-print">
-        <a href="javascript:history.back()" class="text-xs text-slate-600 hover:text-slate-900 font-semibold flex items-center">
-            <i class="fa-solid fa-arrow-left mr-1.5"></i> Back to Workspace
-        </a>
-        <div class="flex items-center space-x-3">
-            <span class="text-xs text-slate-500">Official GeM Technical Evaluation Dossier</span>
-            <button onclick="window.print()" class="bg-slate-900 hover:bg-slate-800 text-white font-bold px-4 py-2 rounded-lg text-xs shadow-xs flex items-center">
-                <i class="fa-solid fa-print mr-2"></i> Print / Save as PDF
-            </button>
+{% block title %}Audit Report & Decision Support - {{ bidder.company_name }}{% endblock %}
+
+{% block content %}
+<div class="space-y-6 max-w-5xl mx-auto my-4 print:m-0 print:max-w-none">
+  <!-- Top Navigation & Print Actions -->
+  <div class="flex items-center justify-between pb-2 print:hidden">
+    <div class="flex items-center space-x-2 text-xs text-slate-500">
+      {% if current_user.role in ('admin', 'officer') %}
+        <a href="/tenders/{{ tender.id }}" class="hover:underline">&larr; Return to Tender Submissions</a>
+      {% else %}
+        <a href="/bidder" class="hover:underline">&larr; Return to Bidder Dashboard</a>
+      {% endif %}
+      <span>/</span>
+      <span class="font-mono text-slate-800 font-semibold">Evaluation Report #{{ verification.id }}</span>
+    </div>
+    <div class="flex items-center space-x-2">
+      <button onclick="window.print()" class="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-50 rounded text-xs font-semibold text-slate-700 shadow-sm flex items-center gap-1.5">
+        <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+        Print / Save PDF
+      </button>
+    </div>
+  </div>
+
+  <!-- EXECUTIVE DECISION-SUPPORT HERO -->
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+    <div class="p-6 border-b border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+            {{ tender.gem_bid_id }}
+          </span>
+          <span class="text-xs font-mono text-slate-500 font-semibold">Verification Version {{ verification.version_num }}</span>
         </div>
+        <h1 class="text-2xl font-bold text-slate-900 mt-1">{{ bidder.company_name }}</h1>
+        <p class="text-xs text-slate-500 mt-0.5">
+          Tender: <strong class="text-slate-700">{{ tender.title }}</strong> ({{ tender.organization }})
+        </p>
+      </div>
+
+      <!-- Final Ruling Status Badge -->
+      <div class="text-right">
+        {% if verification.officer_decision %}
+          <div class="text-xs text-slate-400 font-semibold uppercase tracking-wider mb-1">Procurement Officer Ruling:</div>
+          <span class="px-4 py-1.5 rounded-lg text-sm font-bold shadow-sm
+            {% if verification.officer_decision == 'QUALIFIED' %}bg-emerald-600 text-white
+            {% else %}bg-rose-600 text-white{% endif %}">
+            {{ verification.officer_decision }}
+          </span>
+        {% else %}
+          <div class="text-xs text-slate-400 font-semibold uppercase tracking-wider mb-1">Status:</div>
+          <span class="px-3 py-1 rounded text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+            Pending Officer Decision
+          </span>
+        {% endif %}
+      </div>
     </div>
 
-    <!-- Main Report Document Container -->
-    <div class="max-w-4xl mx-auto bg-white rounded-xl shadow-md border border-slate-200 p-8 sm:p-12 space-y-8">
-        
-        <!-- Official Header -->
-        <div class="border-b-2 border-slate-900 pb-6 flex justify-between items-start">
-            <div class="space-y-1">
-                <div class="text-[11px] font-mono uppercase tracking-widest text-slate-500 font-bold">
-                    GOVERNMENT OF INDIA • PROCUREMENT DUE DILIGENCE
-                </div>
-                <h1 class="text-2xl font-black tracking-tight text-slate-900">
-                    EXECUTIVE BID COMPLIANCE REPORT
-                </h1>
-                <div class="text-xs text-slate-600 font-semibold">
-                    Statutory Verification & Multi-Document Evidence Dossier
-                </div>
-            </div>
-            <div class="text-right font-mono text-xs">
-                <div class="bg-slate-100 p-2 rounded border border-slate-200 inline-block text-left">
-                    <div><strong>Report Ref:</strong> GEM-VER-{{ submission.id }}-{{ verification.version_number }}</div>
-                    <div><strong>Generated:</strong> {{ verification.created_at[:16].replace('T', ' ') }} UTC</div>
-                    <div><strong>Tender Ver:</strong> v{{ verification.tender_version }} • <strong>Verif Ver:</strong> v{{ verification.version_number }}</div>
-                </div>
-            </div>
+    <!-- Triple Metric Strip: Score, Mandatory Eligibility, Rule-Based Risk -->
+    <div class="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-slate-100 bg-slate-50/50 p-6">
+      <!-- 1. Numerical Compliance Score -->
+      <div class="pr-4">
+        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider">A. Compliance Completeness</div>
+        <div class="flex items-baseline gap-1 mt-2">
+          <span class="text-4xl font-extrabold text-slate-900">{{ verification.score }}</span>
+          <span class="text-sm font-bold text-slate-400">/ 100</span>
         </div>
-
-        <!-- Entity & Tender Identification Grid -->
-        <div class="grid grid-cols-2 gap-6 text-xs">
-            <div class="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-1.5">
-                <div class="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Bidder Entity Profile</div>
-                <div class="text-base font-bold text-slate-900">{{ bidder.legal_name }}</div>
-                <div class="text-slate-600">PAN: <strong class="font-mono text-slate-800">{{ bidder.pan }}</strong></div>
-                <div class="text-slate-600">GSTIN: <strong class="font-mono text-slate-800">{{ bidder.gstin }}</strong></div>
-                <div class="text-slate-600">MSME Udyam: <strong class="font-mono text-slate-800">{{ bidder.udyam_reg }}</strong></div>
-                <div class="text-slate-500 text-[11px] pt-1">{{ bidder.registered_address }}</div>
-            </div>
-
-            <div class="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-1.5">
-                <div class="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Procurement Tender Reference</div>
-                <div class="text-base font-bold text-slate-900">{{ tender.gem_bid_id }}</div>
-                <div class="font-semibold text-slate-700">{{ tender.title }}</div>
-                <div class="text-slate-600">Procuring Org: {{ tender.organization }}</div>
-                <div class="text-slate-600">Estimated Value: <strong>₹{{ "{:,.0f}".format(tender.estimated_value) }}</strong></div>
-                <div class="text-slate-500 text-[11px] pt-1">Active Specification: Version {{ tender.tender_version }}</div>
-            </div>
+        <div class="w-full bg-slate-200 rounded-full h-2 mt-2 overflow-hidden">
+          <div class="bg-blue-600 h-2 rounded-full" style="width: {{ verification.score }}%"></div>
         </div>
+        <p class="text-[11px] text-slate-400 mt-2">Quantitative score across evaluated tender criteria.</p>
+      </div>
 
-        <!-- Triple Independent Metrics Scorecard -->
-        <div class="grid grid-cols-3 gap-4 border border-slate-200 rounded-xl p-4 bg-slate-50 text-center">
-            <div>
-                <div class="text-[10px] font-bold uppercase text-slate-400">1. Quantitative Compliance</div>
-                <div class="text-3xl font-black font-mono text-slate-900 mt-1">{{ verification.compliance_score }}%</div>
-                <div class="text-[10px] text-slate-500 mt-0.5">Evaluated Rule Points</div>
-            </div>
-            <div class="border-x border-slate-200 px-2">
-                <div class="text-[10px] font-bold uppercase text-slate-400">2. Eligibility Recommendation</div>
-                <div class="mt-1.5">
-                    <span class="px-3 py-1 rounded text-xs font-bold uppercase tracking-wider
-                        {% if verification.eligibility_recommendation == 'ELIGIBLE' %}bg-emerald-100 text-emerald-800
-                        {% elif verification.eligibility_recommendation == 'NEEDS_REVIEW' %}bg-amber-100 text-amber-800
-                        {% else %}bg-rose-100 text-rose-800{% endif %}">
-                        {{ verification.eligibility_recommendation }}
-                    </span>
-                </div>
-                <div class="text-[10px] text-slate-500 mt-1">Rule Engine Determination</div>
-            </div>
-            <div>
-                <div class="text-[10px] font-bold uppercase text-slate-400">3. Rule-Based Risk</div>
-                <div class="mt-1.5">
-                    <span class="px-2.5 py-1 rounded text-xs font-bold
-                        {% if verification.risk_level == 'LOW' %}bg-emerald-100 text-emerald-800
-                        {% elif verification.risk_level == 'MEDIUM' %}bg-amber-100 text-amber-800
-                        {% else %}bg-rose-100 text-rose-800{% endif %}">
-                        {{ verification.risk_level }} ({{ verification.risk_score }}/100)
-                    </span>
-                </div>
-                <div class="text-[10px] text-slate-500 mt-1">Anomaly & Debarment Risk</div>
-            </div>
+      <!-- 2. Mandatory Eligibility Gating -->
+      <div class="px-0 md:px-6 pt-4 md:pt-0">
+        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider">B. Mandatory Eligibility</div>
+        <div class="mt-2">
+          {% if verification.eligibility == 'ELIGIBLE' %}
+            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <span class="w-2 h-2 rounded-full bg-emerald-500 mr-1.5"></span>
+              ELIGIBLE
+            </span>
+          {% elif verification.eligibility == 'NOT_ELIGIBLE' %}
+            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200">
+              <span class="w-2 h-2 rounded-full bg-rose-500 mr-1.5"></span>
+              NOT ELIGIBLE
+            </span>
+          {% else %}
+            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
+              <span class="w-2 h-2 rounded-full bg-amber-500 mr-1.5"></span>
+              NEEDS REVIEW
+            </span>
+          {% endif %}
         </div>
+        <p class="text-[11px] text-slate-500 mt-2">
+          {% if verification.eligibility == 'NOT_ELIGIBLE' %}
+            <strong class="text-rose-700 font-semibold">Strict Rule Enforced:</strong> Mandatory criteria failed. High compliance score cannot override mandatory disqualification.
+          {% else %}
+            Independent mandatory criteria gate check.
+          {% endif %}
+        </p>
+      </div>
 
-        <!-- Statutory Cross-Validation Table -->
-        <div class="space-y-2 text-xs">
-            <div class="flex justify-between items-center">
-                <h2 class="font-bold uppercase tracking-wider text-slate-700 text-xs">A. Statutory Registry Verification</h2>
-                <span class="text-[10px] font-mono text-slate-400">MOCK ENVIRONMENT ADAPTERS</span>
-            </div>
-            <table class="w-full border border-slate-200 text-left">
-                <thead class="bg-slate-100 text-slate-700 font-semibold text-[11px]">
-                    <tr>
-                        <th class="p-2 border-b border-r border-slate-200">Statutory Registry</th>
-                        <th class="p-2 border-b border-r border-slate-200">Identifier Checked</th>
-                        <th class="p-2 border-b border-r border-slate-200">Registry Status</th>
-                        <th class="p-2 border-b border-slate-200">Result & Observations</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-200 font-mono text-[11px]">
-                    <tr>
-                        <td class="p-2 border-r font-sans font-semibold">Goods & Services Tax (GST)</td>
-                        <td class="p-2 border-r">{{ bidder.gstin }}</td>
-                        <td class="p-2 border-r font-bold">{{ statutory_checks.GST.status if statutory_checks.GST else 'UNCHECKED' }}</td>
-                        <td class="p-2 font-sans">{{ statutory_checks.GST.message if statutory_checks.GST else '' }}</td>
-                    </tr>
-                    <tr>
-                        <td class="p-2 border-r font-sans font-semibold">Income Tax PAN</td>
-                        <td class="p-2 border-r">{{ bidder.pan }}</td>
-                        <td class="p-2 border-r font-bold">{{ statutory_checks.PAN.status if statutory_checks.PAN else 'UNCHECKED' }}</td>
-                        <td class="p-2 font-sans">{{ statutory_checks.PAN.message if statutory_checks.PAN else '' }}</td>
-                    </tr>
-                    <tr>
-                        <td class="p-2 border-r font-sans font-semibold">MSME Udyam</td>
-                        <td class="p-2 border-r">{{ bidder.udyam_reg }}</td>
-                        <td class="p-2 border-r font-bold">{{ statutory_checks.UDYAM.status if statutory_checks.UDYAM else 'UNCHECKED' }}</td>
-                        <td class="p-2 font-sans">{{ statutory_checks.UDYAM.message if statutory_checks.UDYAM else '' }}</td>
-                    </tr>
-                    <tr>
-                        <td class="p-2 border-r font-sans font-semibold">Central Debarment / Blacklist</td>
-                        <td class="p-2 border-r">{{ bidder.pan }} / {{ bidder.gstin }}</td>
-                        <td class="p-2 border-r font-bold {% if statutory_checks.BLACKLIST and statutory_checks.BLACKLIST.is_blacklisted %}text-rose-600{% else %}text-emerald-700{% endif %}">
-                            {{ 'BLACKLISTED' if statutory_checks.BLACKLIST and statutory_checks.BLACKLIST.is_blacklisted else 'CLEAR' }}
-                        </td>
-                        <td class="p-2 font-sans">{{ statutory_checks.BLACKLIST.message if statutory_checks.BLACKLIST else '' }}</td>
-                    </tr>
-                </tbody>
-            </table>
+      <!-- 3. Current-Bid Rule-Based Risk -->
+      <div class="pl-0 md:pl-6 pt-4 md:pt-0">
+        <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider">C. Explainable Bid Risk</div>
+        <div class="mt-2">
+          {% if verification.risk_level == 'LOW' %}
+            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">LOW RISK</span>
+          {% elif verification.risk_level == 'MEDIUM' %}
+            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">MEDIUM RISK</span>
+          {% else %}
+            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200">HIGH RISK</span>
+          {% endif %}
         </div>
-
-        <!-- Requirements Evaluation & Page-Level Evidence Trace Table -->
-        <div class="space-y-2 text-xs">
-            <h2 class="font-bold uppercase tracking-wider text-slate-700 text-xs">B. Requirement-by-Requirement Evidence Trace</h2>
-            <table class="w-full border border-slate-200 text-left">
-                <thead class="bg-slate-100 text-slate-700 font-semibold text-[11px]">
-                    <tr>
-                        <th class="p-2 border-b border-r border-slate-200">Rule Code</th>
-                        <th class="p-2 border-b border-r border-slate-200">Requirement</th>
-                        <th class="p-2 border-b border-r border-slate-200">Type</th>
-                        <th class="p-2 border-b border-r border-slate-200">Result</th>
-                        <th class="p-2 border-b border-r border-slate-200">Deterministic Calculations & Findings</th>
-                        <th class="p-2 border-b border-slate-200">Evidence Citations</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-200 text-[11px]">
-                    {% for item in req_evaluations %}
-                    <tr>
-                        <td class="p-2 border-r font-mono font-bold">{{ item.requirement.code }}</td>
-                        <td class="p-2 border-r font-semibold">{{ item.requirement.title }}</td>
-                        <td class="p-2 border-r">
-                            {% if item.requirement.is_mandatory %}
-                                <span class="font-bold text-rose-700">MANDATORY</span>
-                            {% else %}
-                                <span class="text-slate-500">OPTIONAL</span>
-                            {% endif %}
-                        </td>
-                        <td class="p-2 border-r font-bold">
-                            <span class="{% if item.verification.status == 'PASS' %}text-emerald-700
-                                {% elif item.verification.status in ('WARNING', 'NEEDS_REVIEW') %}text-amber-700
-                                {% else %}text-rose-700{% endif %}">
-                                {{ item.verification.status }}
-                            </span>
-                        </td>
-                        <td class="p-2 border-r">
-                            <div>{{ item.verification.rule_summary }}</div>
-                            {% if item.verification.conflict_detected %}
-                                <div class="text-rose-700 font-bold mt-1">Conflict: {{ item.verification.conflict_details }}</div>
-                            {% endif %}
-                        </td>
-                        <td class="p-2 font-mono text-[10px]">
-                            {% if item.evidence_records %}
-                                {% for ev in item.evidence_records %}
-                                    <div class="truncate max-w-xs">
-                                        Page {{ ev.page_number }}: {{ ev.field_name }}={{ ev.value }} ({{ ev.filename }})
-                                    </div>
-                                {% endfor %}
-                            {% else %}
-                                <span class="text-slate-400 italic">No citations</span>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-
-        <!-- Procurement Officer Final Review Sign-off -->
-        <div class="border-t-2 border-slate-200 pt-6 grid grid-cols-2 gap-6 text-xs">
-            <div class="space-y-2">
-                <div class="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Officer Determination</div>
-                <div class="text-base font-bold text-slate-900">
-                    Decision: {{ submission.officer_decision or 'PENDING FORMAL SIGN-OFF' }}
-                </div>
-                <div class="text-slate-700 italic bg-slate-50 p-3 rounded border border-slate-200">
-                    "{{ submission.officer_remarks or 'Verification completed automatically; pending formal review by designated evaluator.' }}"
-                </div>
+        <div class="mt-2 space-y-1">
+          {% for rf in verification.risk_factors %}
+            <div class="text-[11px] text-slate-600 flex items-start gap-1">
+              <span class="text-amber-500 font-bold">&bull;</span>
+              <span>{{ rf }}</span>
             </div>
-            <div class="flex flex-col justify-end items-end space-y-4 text-right">
-                <div class="w-48 border-b border-slate-400 pb-1 text-center font-serif italic text-slate-600">
-                    [Digitally Signed via GeM]
-                </div>
-                <div class="text-slate-500 text-[11px]">
-                    <div>Designated Procurement Officer</div>
-                    <div>Department of Digital Infrastructure / GeM</div>
-                </div>
-            </div>
+          {% else %}
+            <div class="text-[11px] text-emerald-700">No adverse risk indicators detected.</div>
+          {% endfor %}
         </div>
-
+      </div>
     </div>
-</body>
-</html>
+  </div>
+
+  <!-- AI DECISION-SUPPORT SYNTHESIS -->
+  <div class="bg-blue-50/50 border border-blue-200 rounded-xl p-6 shadow-sm">
+    <div class="flex items-center gap-2 mb-2">
+      <div class="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-[10px]">AI</div>
+      <h2 class="text-xs font-bold text-blue-900 uppercase tracking-wider">Automated Decision-Support Assessment</h2>
+    </div>
+    <p class="text-xs text-slate-700 leading-relaxed whitespace-pre-line">
+      {{ verification.recommendation }}
+    </p>
+  </div>
+
+  <!-- IDENTITY & CROSS-SOURCE CONFLICT DETECTION -->
+  {% if verification.conflicts_detected %}
+    <div class="bg-rose-50 border border-rose-200 rounded-xl p-6 shadow-sm">
+      <h2 class="text-xs font-bold text-rose-900 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+        <svg class="w-4 h-4 text-rose-600" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
+        Discrepancy / Cross-Source Conflict Warning ({{ verification.conflicts_detected | length }})
+      </h2>
+      <div class="space-y-3">
+        {% for c in verification.conflicts_detected %}
+          <div class="bg-white p-3 rounded-lg border border-rose-200 text-xs">
+            <div class="font-bold text-rose-900">{{ c.description }}</div>
+            <div class="grid grid-cols-2 gap-2 mt-2 text-[11px]">
+              <div class="bg-slate-50 p-2 rounded">
+                <span class="text-slate-400 block">{{ c.source_a }}:</span>
+                <span class="font-semibold text-slate-800">{{ c.value_a }}</span>
+              </div>
+              <div class="bg-slate-50 p-2 rounded">
+                <span class="text-slate-400 block">{{ c.source_b }}:</span>
+                <span class="font-semibold text-slate-800">{{ c.value_b }}</span>
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+
+  <!-- STATUTORY ADAPTER VERIFICATION BREAKDOWN -->
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+    <div class="px-6 py-4 border-b border-slate-200">
+      <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wider">Statutory Registry Verification Summary</h2>
+      <p class="text-xs text-slate-500 mt-0.5">Authoritative portal queries with normalized contract responses and disclaimers</p>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-xs text-slate-600">
+        <thead class="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200">
+          <tr>
+            <th class="px-6 py-3">Public Source</th>
+            <th class="px-6 py-3">Source Mode</th>
+            <th class="px-6 py-3">Status</th>
+            <th class="px-6 py-3">Findings & Message</th>
+            <th class="px-6 py-3">Disclaimer</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-200">
+          {% for source_name, s_res in verification.statutory_summary.items() %}
+            <tr class="hover:bg-slate-50 transition">
+              <td class="px-6 py-3 font-semibold text-slate-900">{{ source_name }}</td>
+              <td class="px-6 py-3">
+                <span class="px-2 py-0.5 rounded font-mono text-[10px] font-bold
+                  {% if s_res.source_mode == 'MOCK' %}bg-blue-50 text-blue-700 border border-blue-200
+                  {% elif s_res.source_mode == 'OFFICIAL' %}bg-emerald-50 text-emerald-700 border border-emerald-200
+                  {% else %}bg-slate-100 text-slate-600{% endif %}">
+                  {{ s_res.source_mode }}
+                </span>
+              </td>
+              <td class="px-6 py-3">
+                {% if s_res.is_valid is sameas true %}
+                  <span class="text-emerald-700 font-semibold">✓ {{ s_res.status }}</span>
+                {% elif s_res.is_valid is sameas false %}
+                  <span class="text-rose-700 font-semibold">✗ {{ s_res.status }}</span>
+                {% else %}
+                  <span class="text-amber-700 font-semibold">? {{ s_res.status }}</span>
+                {% endif %}
+              </td>
+              <td class="px-6 py-3 text-slate-700 max-w-sm">{{ s_res.message }}</td>
+              <td class="px-6 py-3 text-[10px] font-mono text-slate-400">{{ s_res.disclaimer }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- DETAILED REQUIREMENT-BY-REQUIREMENT TRACEABILITY -->
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+    <div class="px-6 py-4 border-b border-slate-200">
+      <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wider">Evaluation Clauses & Evidence Traceability Matrix</h2>
+      <p class="text-xs text-slate-500 mt-0.5">Audit trail linking each requirement to verification, submitted document, and extracted evidence</p>
+    </div>
+    <div class="divide-y divide-slate-200">
+      {% for req in verification.requirement_evaluations %}
+        <div class="p-6 space-y-3">
+          <div class="flex items-center justify-between">
+            <div>
+              <span class="font-mono font-bold text-blue-600 text-xs">{{ req.code }}</span>
+              <span class="font-bold text-slate-900 text-sm ml-2">{{ req.title }}</span>
+              {% if req.is_mandatory %}
+                <span class="ml-2 px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200 uppercase">MANDATORY</span>
+              {% else %}
+                <span class="ml-2 px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-600 border border-slate-200 uppercase">OPTIONAL</span>
+              {% endif %}
+            </div>
+            <div class="flex items-center gap-3">
+              <span class="text-xs font-mono font-bold text-slate-800">
+                Score: {{ req.score_awarded }} / {{ req.max_score }}
+              </span>
+              <span class="px-2.5 py-0.5 rounded-full text-xs font-bold
+                {% if req.status == 'COMPLIANT' %}bg-emerald-50 text-emerald-700 border border-emerald-200
+                {% elif req.status == 'NON_COMPLIANT' %}bg-rose-50 text-rose-700 border border-rose-200
+                {% else %}bg-amber-50 text-amber-700 border border-amber-200{% endif %}">
+                {{ req.status }}
+              </span>
+            </div>
+          </div>
+
+          <!-- Traceable Evidence Box -->
+          <div class="bg-slate-50 p-4 rounded-lg border border-slate-200 text-xs space-y-2">
+            <div class="font-semibold text-slate-700 uppercase tracking-wider text-[10px]">Traceable Evidence Extracted:</div>
+            <pre class="bg-white p-3 rounded border border-slate-200 font-mono text-[11px] text-slate-800 overflow-x-auto">{{ req.evidence | tojson(indent=2) }}</pre>
+
+            {% if req.issues %}
+              <div class="mt-2 text-rose-700 font-semibold space-y-1">
+                {% for issue in req.issues %}
+                  <div class="flex items-center gap-1.5">
+                    <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                    <span>{{ issue }}</span>
+                  </div>
+                {% endfor %}
+              </div>
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- SUBMITTED DOCUMENTS REGISTER -->
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+    <div class="px-6 py-4 border-b border-slate-200">
+      <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wider">Submitted Document Artifacts ({{ documents | length }})</h2>
+      <p class="text-xs text-slate-500 mt-0.5">Secure, authenticated access to stored document files and extraction logs</p>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-xs text-slate-600">
+        <thead class="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200">
+          <tr>
+            <th class="px-6 py-3">Original Filename</th>
+            <th class="px-6 py-3">Inferred Document Type</th>
+            <th class="px-6 py-3">Pages</th>
+            <th class="px-6 py-3">OCR Status</th>
+            <th class="px-6 py-3">Supplementary</th>
+            <th class="px-6 py-3 text-right">Action</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-200">
+          {% for doc in documents %}
+            <tr class="hover:bg-slate-50 transition">
+              <td class="px-6 py-4 font-semibold text-slate-900 flex items-center gap-2">
+                <svg class="w-4 h-4 text-rose-500 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd"/></svg>
+                <span>{{ doc.original_filename }}</span>
+              </td>
+              <td class="px-6 py-4 font-mono text-[11px] text-blue-600">{{ doc.doc_type }}</td>
+              <td class="px-6 py-4 font-mono">{{ doc.page_count }}</td>
+              <td class="px-6 py-4">
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold
+                  {% if doc.ocr_status == 'VALID' %}bg-emerald-50 text-emerald-700 border border-emerald-200
+                  {% elif doc.ocr_status == 'NEEDS_REVIEW' %}bg-amber-50 text-amber-700 border border-amber-200
+                  {% else %}bg-slate-100 text-slate-600 border border-slate-200{% endif %}">
+                  {{ doc.ocr_status }}
+                </span>
+              </td>
+              <td class="px-6 py-4">
+                {% if doc.is_supplementary %}
+                  <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-purple-50 text-purple-700 border border-purple-200">Yes (Clarification)</span>
+                {% else %}
+                  <span class="text-slate-400">Initial Bid</span>
+                {% endif %}
+              </td>
+              <td class="px-6 py-4 text-right">
+                <a href="/documents/view/{{ doc.id }}" target="_blank"
+                   class="text-blue-600 hover:text-blue-800 font-semibold">
+                  Inspect Document &rarr;
+                </a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- PROCUREMENT OFFICER FINAL QUALIFICATION RULING SECTION -->
+  {% if current_user.role in ('officer', 'admin') %}
+    <div class="bg-white rounded-xl border border-slate-200 p-6 shadow-sm print:hidden">
+      <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wider mb-1">Human-In-The-Loop Officer Final Determination</h2>
+      <p class="text-xs text-slate-500 mb-4">
+        As the designated procurement official, you must record your authoritative decision with mandatory reasoning.
+      </p>
+
+      {% if verification.officer_decision %}
+        <div class="bg-slate-50 p-4 rounded-lg border border-slate-200 mb-4">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs font-semibold text-slate-700">Existing Recorded Determination:</span>
+            <span class="px-3 py-1 rounded text-xs font-bold text-white
+              {% if verification.officer_decision == 'QUALIFIED' %}bg-emerald-600{% else %}bg-rose-600{% endif %}">
+              {{ verification.officer_decision }}
+            </span>
+          </div>
+          <div class="text-xs text-slate-800 italic">"{{ verification.officer_remarks }}"</div>
+          <div class="text-[11px] text-slate-400 mt-2 font-mono">Decided at: {{ verification.decided_at }}</div>
+        </div>
+      {% endif %}
+
+      <form action="/verifications/{{ verification.id }}/decision" method="POST" class="space-y-4">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Authoritative Determination *</label>
+          <div class="flex gap-4">
+            <label class="flex items-center gap-2 text-xs font-semibold text-emerald-800 bg-emerald-50 px-4 py-2 rounded-lg border border-emerald-200 cursor-pointer">
+              <input type="radio" name="decision" value="QUALIFIED" required {% if verification.officer_decision == 'QUALIFIED' %}checked{% endif %}>
+              QUALIFY BIDDER (Advance to Financial Evaluation)
+            </label>
+            <label class="flex items-center gap-2 text-xs font-semibold text-rose-800 bg-rose-50 px-4 py-2 rounded-lg border border-rose-200 cursor-pointer">
+              <input type="radio" name="decision" value="DISQUALIFIED" required {% if verification.officer_decision == 'DISQUALIFIED' %}checked{% endif %}>
+              DISQUALIFY BIDDER (Reject Technical Bid)
+            </label>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Official Officer Remarks & Justification *</label>
+          <textarea name="remarks" rows="3" required
+                    class="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Enter formal justification for qualification or specific clauses resulting in disqualification...">{{ verification.officer_remarks or '' }}</textarea>
+        </div>
+
+        <button type="submit" class="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-lg shadow-sm transition">
+          Record Authoritative Determination
+        </button>
+      </form>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

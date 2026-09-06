@@ -717,6 +717,27 @@ app.post('/bidder/register', (req, res) => {
   res.redirect('/bidder/dashboard');
 });
 
+// 17. Route Aliases & Quick Role Switchers
+app.get('/admin', (req, res) => res.redirect('/admin/dashboard'));
+app.get('/officer/tenders', (req, res) => res.redirect('/dashboard'));
+app.get('/officer/tender/:id', (req, res) => res.redirect(`/tenders/${req.params.id}`));
+app.get('/tenders', (req, res) => res.redirect('/admin/dashboard'));
+
+app.get('/auth/switch/:role', (req, res) => {
+  const role = req.params.role;
+  if (role.includes('admin')) {
+    req.session.user = users.find(u => u.role === 'admin') || users[0];
+    return res.redirect('/admin/dashboard');
+  } else if (role.includes('officer')) {
+    req.session.user = users.find(u => u.role === 'officer') || users[1];
+    return res.redirect('/dashboard');
+  } else {
+    // Bidder (e.g. bidder_a, bidder_b, bidder_c)
+    req.session.user = users.find(u => u.role === 'bidder') || users[2];
+    return res.redirect('/bidder/dashboard');
+  }
+});
+
 // Start Server
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`GeM Compliance Verify server running on http://0.0.0.0:${PORT}`);

@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+
+{% block title %}Enterprise Bidder Registration - GeM Compliance{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto my-6">
+  <div class="bg-white p-8 rounded-xl shadow-sm border border-slate-200">
+    <div class="flex items-center justify-between mb-6 pb-4 border-b border-slate-200">
+      <div>
+        <h1 class="text-xl font-bold text-slate-900">Bidder Enterprise Registration</h1>
+        <p class="text-xs text-slate-500 mt-0.5">Register your company profile to participate in GeM procurement tenders</p>
+      </div>
+      <button type="button" onclick="fillSampleBidder()"
+              class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded border border-slate-300 transition">
+        Prefill Sample Company
+      </button>
+    </div>
+
+    <form action="/register" method="POST" class="space-y-6">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <!-- User Account Section -->
+      <div>
+        <h2 class="text-xs font-bold text-blue-900 uppercase tracking-wider mb-3">1. Authorized User Account</h2>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Full Name *</label>
+            <input type="text" id="name" name="name" required
+                   class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                   placeholder="e.g. Vikram Malhotra">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Official Email *</label>
+            <input type="email" id="email" name="email" required
+                   class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                   placeholder="compliance@company.com">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Password *</label>
+            <input type="password" id="password" name="password" required
+                   class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                   placeholder="Minimum 6 characters">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Mobile / Telephone *</label>
+            <input type="text" id="phone" name="phone" required
+                   class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                   placeholder="+91 98765 43210">
+          </div>
+        </div>
+      </div>
+
+      <!-- Enterprise Profile Section -->
+      <div class="pt-4 border-t border-slate-100">
+        <h2 class="text-xs font-bold text-blue-900 uppercase tracking-wider mb-3">2. Enterprise Legal & Statutory Details</h2>
+        <div class="space-y-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Legal Company / Enterprise Name *</label>
+            <input type="text" id="company_name" name="company_name" required
+                   class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                   placeholder="e.g. Bharat Tech Solutions Private Limited">
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">GSTIN *</label>
+              <input type="text" id="gstin" name="gstin" required maxlength="15"
+                     class="w-full px-3 py-2 text-sm font-mono uppercase border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                     placeholder="07AABCU9603R1ZM">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">PAN *</label>
+              <input type="text" id="pan" name="pan" required maxlength="10"
+                     class="w-full px-3 py-2 text-sm font-mono uppercase border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                     placeholder="AABCU9603R">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">Udyam Reg. No (MSME)</label>
+              <input type="text" id="udyam_reg_no" name="udyam_reg_no"
+                     class="w-full px-3 py-2 text-sm font-mono uppercase border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                     placeholder="UDYAM-DL-03-0012345">
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Registered Office Address *</label>
+            <textarea id="registered_address" name="registered_address" rows="2" required
+                      class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                      placeholder="Street, Industrial Area, City, State, PIN"></textarea>
+            <p class="text-[11px] text-slate-400 mt-1">This address will be cross-checked against GST and Udyam records by the automated rule engine.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="pt-4 flex items-center justify-between border-t border-slate-200">
+        <a href="/login" class="text-xs text-slate-500 hover:text-slate-800">Already registered? Sign In</a>
+        <button type="submit" class="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg shadow transition">
+          Complete Registration
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  function fillSampleBidder() {
+    document.getElementById('name').value = 'Vikram Malhotra';
+    document.getElementById('email').value = 'compliance@bharattech.example';
+    document.getElementById('password').value = 'bidder123';
+    document.getElementById('phone').value = '+91 98765 43210';
+    document.getElementById('company_name').value = 'Bharat Tech Solutions Private Limited';
+    document.getElementById('gstin').value = '07AABCU9603R1ZM';
+    document.getElementById('pan').value = 'AABCU9603R';
+    document.getElementById('udyam_reg_no').value = 'UDYAM-DL-03-0012345';
+    document.getElementById('registered_address').value = 'A-12, Okhla Industrial Area Phase II, New Delhi 110020';
+  }
+</script>
+{% endblock %}

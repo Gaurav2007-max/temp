@@ -1,141 +1,121 @@
 {% extends "base.html" %}
 
-{% block title %}Log In • GeM Compliance Verification Platform{% endblock %}
+{% block title %}Sign In - GeM Compliance Verification{% endblock %}
 
 {% block content %}
-<div class="max-w-md mx-auto my-10 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden" id="login-container">
-    <!-- Header Banner -->
-    <div class="bg-gem-navy text-white p-6 text-center border-b border-slate-800">
-        <div class="inline-block bg-amber-500 text-gem-navy font-black text-lg px-2.5 py-1 rounded-md mb-2">
-            GeM<span class="text-white">.verify</span>
-        </div>
-        <h1 class="text-lg font-bold">Portal Sign In</h1>
-        <p class="text-xs text-slate-300 mt-1">Enter your credentials to access your dashboard</p>
+<div class="max-w-md mx-auto my-8">
+  <div class="bg-white p-8 rounded-xl shadow-sm border border-slate-200">
+    <div class="text-center mb-6">
+      <div class="inline-flex items-center justify-center w-12 h-12 rounded-lg bg-blue-600 text-white font-bold text-xl mb-3 shadow-sm">
+        GeM
+      </div>
+      <h1 class="text-xl font-bold text-slate-900 tracking-tight">Sign In to Platform</h1>
+      <p class="text-xs text-slate-500 mt-1">Access Admin, Officer, or Bidder Workspaces</p>
     </div>
 
-    <!-- Mode Selector: Sign In vs Register -->
-    <div class="flex border-b border-slate-200 text-xs font-semibold bg-slate-50">
-        <a href="/login" class="flex-1 py-3 text-center border-b-2 border-gem-navy text-gem-navy bg-white">
-            <i class="fa-solid fa-lock mr-1.5"></i> Sign In
-        </a>
-        <a href="/register" class="flex-1 py-3 text-center text-slate-500 hover:text-slate-900 border-b-2 border-transparent">
-            <i class="fa-solid fa-user-plus mr-1.5"></i> Register New Account
-        </a>
-    </div>
+    <form id="loginForm" action="/login" method="POST" class="space-y-4">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-    <!-- Login Form -->
-    <form action="/auth/login" method="POST" class="p-6 space-y-4 text-xs" id="login-form">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div>
+        <label for="username" class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">Email / Username</label>
+        <input type="text" id="username" name="username" required
+               class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+               placeholder="name@domain.gov.in or email">
+      </div>
 
-        <div>
-            <label class="block font-semibold text-slate-700 mb-1">Username or Gmail / Email Address</label>
-            <div class="relative">
-                <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
-                    <i class="fa-solid fa-envelope"></i>
-                </span>
-                <input type="text" name="username" id="login-username" required placeholder="e.g. aroraganesh2007@gmail.com or username" class="w-full pl-9 border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-gem-blue text-xs">
-            </div>
-            <p class="text-[10px] text-slate-400 mt-1">You can enter either your username or your Gmail / email address.</p>
+      <div>
+        <div class="flex items-center justify-between mb-1">
+          <label for="password" class="block text-xs font-semibold text-slate-700 uppercase tracking-wider">Password</label>
+          <button type="button" onclick="togglePasswordVisibility()" class="text-xs text-blue-600 hover:text-blue-700 font-medium">
+            <span id="pwdToggleLabel">Show</span>
+          </button>
         </div>
+        <input type="password" id="password" name="password" required
+               class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+               placeholder="••••••••">
+      </div>
 
-        <div>
-            <div class="flex justify-between items-center mb-1">
-                <label class="font-semibold text-slate-700">Password</label>
-            </div>
-            <div class="relative">
-                <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
-                    <i class="fa-solid fa-key"></i>
-                </span>
-                <input type="password" name="password" id="login-password" required placeholder="••••••••" class="w-full pl-9 border border-slate-300 rounded-lg p-2.5 focus:ring-2 focus:ring-gem-blue text-xs">
-            </div>
-        </div>
-
-        <button type="submit" id="btn-submit-login" class="w-full bg-gem-navy hover:bg-slate-800 text-white font-bold py-2.5 rounded-lg text-xs shadow-xs transition-colors flex items-center justify-center space-x-2">
-            <i class="fa-solid fa-arrow-right-to-bracket"></i>
-            <span>Sign In to Dashboard</span>
-        </button>
+      <button type="submit" id="signInBtn" class="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm rounded-lg shadow transition flex items-center justify-center gap-2">
+        <span id="signInBtnText">Sign In</span>
+      </button>
     </form>
 
-    <!-- Quick 1-Click Fast Fill & Login Cards -->
-    <div class="p-6 pt-0 space-y-3">
-        <div class="border-t border-slate-200 pt-3">
-            <div class="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-2 flex items-center justify-between">
-                <span>Quick Sign-In Credentials</span>
-                <span class="text-[10px] font-normal text-slate-400">Click to autofill & log in</span>
-            </div>
-            
-            <div class="grid grid-cols-1 gap-2">
-                <!-- Admin 1: aroraganesh2007@gmail.com -->
-                <button type="button" onclick="autoLogin('aroraganesh2007@gmail.com', '2026')" class="w-full text-left p-2.5 rounded-lg border border-amber-300 bg-amber-50 hover:bg-amber-100 transition flex items-center justify-between group">
-                    <div class="flex items-center space-x-2">
-                        <div class="w-7 h-7 rounded-full bg-amber-500 text-gem-navy flex items-center justify-center text-xs font-bold">
-                            <i class="fa-solid fa-shield-halved"></i>
-                        </div>
-                        <div>
-                            <div class="font-bold text-slate-900 text-xs flex items-center">
-                                aroraganesh2007@gmail.com
-                                <span class="ml-1.5 bg-amber-200 text-amber-900 text-[9px] font-bold px-1.5 py-0.2 rounded">Admin</span>
-                            </div>
-                            <div class="text-[10px] text-slate-500">Password: <code class="font-mono text-slate-800 font-bold">2026</code></div>
-                        </div>
-                    </div>
-                    <span class="text-xs text-amber-800 font-semibold group-hover:translate-x-0.5 transition-transform">Sign In &rarr;</span>
-                </button>
+    <div class="mt-6 pt-6 border-t border-slate-200">
+      <div class="flex items-center justify-between mb-2">
+        <div class="text-xs font-semibold text-slate-600 uppercase tracking-wider">1-Click Direct Login</div>
+        <span class="text-[10px] text-emerald-600 font-medium bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">Instant Access</span>
+      </div>
+      <div class="grid grid-cols-3 gap-2 mb-3">
+        <button type="button" id="btnAdminDirect" onclick="quickLogin('{{ demo_admin_user }}', '{{ demo_admin_pass }}', 'Admin')"
+                class="px-2 py-2.5 bg-blue-50 hover:bg-blue-100 active:bg-blue-200 text-blue-800 text-xs font-bold rounded-lg border border-blue-200 text-center transition shadow-xs cursor-pointer">
+          &rarr; Admin
+          <span class="block text-[10px] text-blue-600 font-normal truncate mt-0.5">{{ demo_admin_user }}</span>
+        </button>
+        <button type="button" id="btnOfficerDirect" onclick="quickLogin('officer@gem.gov.in', 'officer123', 'Officer')"
+                class="px-2 py-2.5 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-800 text-xs font-bold rounded-lg border border-slate-300 text-center transition shadow-xs cursor-pointer">
+          &rarr; Officer
+          <span class="block text-[10px] text-slate-500 font-normal truncate mt-0.5">officer@gem...</span>
+        </button>
+        <button type="button" id="btnBidderDirect" onclick="quickLogin('compliance@bharattech.example', 'bidder123', 'Bidder')"
+                class="px-2 py-2.5 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-800 text-xs font-bold rounded-lg border border-slate-300 text-center transition shadow-xs cursor-pointer">
+          &rarr; Bidder
+          <span class="block text-[10px] text-slate-500 font-normal truncate mt-0.5">compliance@...</span>
+        </button>
+      </div>
 
-                <!-- Admin 2: Gaurav_2007 -->
-                <button type="button" onclick="autoLogin('Gaurav_2007', '2026')" class="w-full text-left p-2.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 transition flex items-center justify-between group">
-                    <div class="flex items-center space-x-2">
-                        <div class="w-7 h-7 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-xs font-bold">
-                            <i class="fa-solid fa-user-gear"></i>
-                        </div>
-                        <div>
-                            <div class="font-bold text-slate-900 text-xs">Gaurav_2007 (Admin)</div>
-                            <div class="text-[10px] text-slate-500">Password: <code class="font-mono text-slate-800 font-bold">2026</code></div>
-                        </div>
-                    </div>
-                    <span class="text-xs text-slate-700 font-semibold group-hover:translate-x-0.5 transition-transform">Sign In &rarr;</span>
-                </button>
-
-                <!-- Bidder: GauravLeetCode2025 / gauravrajputfeb2007@gmail.com -->
-                <button type="button" onclick="autoLogin('gauravrajputfeb2007@gmail.com', '2026')" class="w-full text-left p-2.5 rounded-lg border border-emerald-200 bg-emerald-50/60 hover:bg-emerald-100/70 transition flex items-center justify-between group">
-                    <div class="flex items-center space-x-2">
-                        <div class="w-7 h-7 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center text-xs font-bold">
-                            <i class="fa-solid fa-building"></i>
-                        </div>
-                        <div>
-                            <div class="font-bold text-slate-900 text-xs flex items-center">
-                                gauravrajputfeb2007@gmail.com
-                                <span class="ml-1.5 bg-emerald-100 text-emerald-800 text-[9px] font-bold px-1.5 py-0.2 rounded">Bidder</span>
-                            </div>
-                            <div class="text-[10px] text-slate-500">Username: <code class="font-mono text-slate-700">GauravLeetCode2025</code> • Pass: <code class="font-mono text-slate-800 font-bold">2026</code></div>
-                        </div>
-                    </div>
-                    <span class="text-xs text-emerald-800 font-semibold group-hover:translate-x-0.5 transition-transform">Sign In &rarr;</span>
-                </button>
-            </div>
-            
-            <div class="mt-2.5 p-2.5 rounded-lg bg-blue-50/50 border border-blue-100 text-[11px] text-slate-600 flex items-start space-x-2">
-                <i class="fa-solid fa-circle-info text-blue-600 mt-0.5"></i>
-                <div>
-                    <span class="font-semibold text-slate-800">Procurement Officers:</span> Officers are added directly by the Administrator from the Admin Management Console. Once provisioned, officers log in using their official registered email.
-                </div>
-            </div>
+      <div class="p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-[11px] text-slate-600 space-y-1">
+        <div class="flex items-center justify-between">
+          <span><strong class="text-slate-800">Admin:</strong> <code class="text-blue-700 bg-white px-1 py-0.5 rounded border border-slate-200">{{ demo_admin_user }}</code> / <code class="text-blue-700 bg-white px-1 py-0.5 rounded border border-slate-200">{{ demo_admin_pass }}</code></span>
+          <button type="button" onclick="fillCreds('{{ demo_admin_user }}', '{{ demo_admin_pass }}')" class="text-[10px] text-blue-600 hover:underline font-semibold">Fill Only</button>
         </div>
-
-        <div class="text-center pt-2">
-            <span class="text-slate-500 text-xs">Need an enterprise account? </span>
-            <a href="/register" class="text-gem-blue hover:underline font-bold text-xs">
-                Register New Bidder Account
-            </a>
+        <div class="flex items-center justify-between">
+          <span><strong class="text-slate-800">Officer:</strong> <code class="text-slate-700 bg-white px-1 py-0.5 rounded border border-slate-200">officer@gem.gov.in</code> / <code class="text-slate-700 bg-white px-1 py-0.5 rounded border border-slate-200">officer123</code></span>
+          <button type="button" onclick="fillCreds('officer@gem.gov.in', 'officer123')" class="text-[10px] text-blue-600 hover:underline font-semibold">Fill Only</button>
         </div>
+      </div>
     </div>
+
+    <div class="mt-6 text-center text-xs text-slate-500">
+      New vendor or supplier?
+      <a href="/register" class="text-blue-600 hover:underline font-semibold ml-1">Register your enterprise</a>
+    </div>
+  </div>
 </div>
 
 <script>
-function autoLogin(username, password) {
-    document.getElementById('login-username').value = username;
-    document.getElementById('login-password').value = password;
-    document.getElementById('login-form').submit();
-}
+  function fillCreds(u, p) {
+    document.getElementById('username').value = u;
+    document.getElementById('password').value = p;
+  }
+
+  function quickLogin(u, p, roleName) {
+    fillCreds(u, p);
+    const btn = document.getElementById('signInBtn');
+    const label = document.getElementById('signInBtnText');
+    if (label) label.textContent = 'Signing in as ' + roleName + '...';
+    if (btn) btn.disabled = true;
+    document.getElementById('loginForm').submit();
+  }
+
+  document.getElementById('loginForm').addEventListener('submit', function() {
+    const btn = document.getElementById('signInBtn');
+    const label = document.getElementById('signInBtnText');
+    if (label && label.textContent === 'Sign In') {
+      label.textContent = 'Signing in...';
+    }
+    if (btn) btn.classList.add('opacity-75');
+  });
+
+  function togglePasswordVisibility() {
+    const pwdInput = document.getElementById('password');
+    const toggleLabel = document.getElementById('pwdToggleLabel');
+    if (pwdInput.type === 'password') {
+      pwdInput.type = 'text';
+      toggleLabel.textContent = 'Hide';
+    } else {
+      pwdInput.type = 'password';
+      toggleLabel.textContent = 'Show';
+    }
+  }
 </script>
 {% endblock %}
