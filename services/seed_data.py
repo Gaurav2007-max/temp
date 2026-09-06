@@ -12,8 +12,18 @@ class FileStorageMock:
         self.path = path
         self.filename = filename
         self.content_type = "application/pdf"
+        self._f = open(path, "rb")
     def save(self, dst):
         shutil.copyfile(self.path, dst)
+    def seek(self, offset, whence=0):
+        return self._f.seek(offset, whence)
+    def tell(self):
+        return self._f.tell()
+    def read(self, size=-1):
+        return self._f.read(size)
+    def close(self):
+        if hasattr(self, "_f") and not self._f.closed:
+            self._f.close()
 
 def seed_database():
     """

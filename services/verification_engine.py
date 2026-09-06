@@ -408,7 +408,7 @@ def run_bidder_verification(tender_id, bidder_id, is_reverification=False):
                     grouped_projects[group_key] = {
                         "project_key": group_key,
                         "work_order_no": wo_no or "N/A",
-                        "client_name": client or "Public Sector Client",
+                        "client_name": client or "Client Not Specified",
                         "project_value": float(val) if val else 0.0,
                         "is_completed": is_comp,
                         "completion_date": fields.get("completion_date"),
@@ -424,7 +424,7 @@ def run_bidder_verification(tender_id, bidder_id, is_reverification=False):
                         grouped_projects[group_key]["completion_date"] = fields.get("completion_date")
                     if wo_no and grouped_projects[group_key]["work_order_no"] == "N/A":
                         grouped_projects[group_key]["work_order_no"] = wo_no
-                    if client and grouped_projects[group_key]["client_name"] == "Public Sector Client":
+                    if client and grouped_projects[group_key]["client_name"] == "Client Not Specified":
                         grouped_projects[group_key]["client_name"] = client
 
                 grouped_projects[group_key]["documents"].append({

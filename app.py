@@ -24,7 +24,11 @@ from services.statutory_service import (
 )
 from services.document_service import (
     save_and_process_uploaded_documents,
-    get_documents_by_bidder_and_tender
+    save_requirement_document,
+    get_bidder_document_checklist,
+    get_documents_by_bidder_and_tender,
+    validate_uploaded_document_file,
+    RECOMMENDED_FILENAMES
 )
 from services.verification_engine import (
     run_bidder_verification,
@@ -139,6 +143,9 @@ def csrf_protect():
     Verifies CSRF token on modifying HTTP methods.
     Supports session tokens and cryptographically signed tokens (for iframe resilience).
     """
+    if not app.config.get("WTF_CSRF_ENABLED", True):
+        return
+
     if request.method in ("POST", "PUT", "DELETE", "PATCH"):
         if request.path.startswith("/api/public/"):
             return
@@ -533,17 +540,12 @@ def officer_dashboard():
 
 @app.route("/tenders/import", methods=["GET", "POST"])
 @login_required
-@role_required("officer", "admin")
+@role_required("admin")
 def tender_import():
     if request.method == "POST":
         gem_bid_id = request.form.get("gem_bid_id", "").strip()
         try:
             tender_id = import_tender_from_gem(gem_bid_id, officer_id=session.get("user_id"))
-            # Auto-assign to creating officer
-            execute_db(
-                "INSERT OR IGNORE INTO tender_assignments (tender_id, officer_id, assigned_by) VALUES (?, ?, ?)",
-                (tender_id, session.get("user_id"), session.get("user_id"))
-            )
             log_audit_event("TENDER_IMPORTED", "tenders", tender_id, f"Imported GeM bid {gem_bid_id}")
             flash(f"Tender {gem_bid_id} imported successfully.", "success")
             return redirect(url_for("tender_detail", tender_id=tender_id))
@@ -553,7 +555,7 @@ def tender_import():
 
 @app.route("/tenders/create-manual", methods=["POST"])
 @login_required
-@role_required("officer", "admin")
+@role_required("admin")
 def tender_create_manual():
     gem_bid_id = request.form.get("gem_bid_id", "").strip()
     title = request.form.get("title", "").strip()
@@ -574,10 +576,6 @@ def tender_create_manual():
             min_local_content=min_lc,
             created_by=session.get("user_id"),
             pdf_file=pdf_file
-        )
-        execute_db(
-            "INSERT OR IGNORE INTO tender_assignments (tender_id, officer_id, assigned_by) VALUES (?, ?, ?)",
-            (tender_id, session.get("user_id"), session.get("user_id"))
         )
         log_audit_event("TENDER_CREATED", "tenders", tender_id, f"Created tender {gem_bid_id}")
         flash("Custom tender published successfully.", "success")
@@ -746,44 +744,237 @@ def bid_submit(tender_id):
         return redirect(url_for("bidder_dashboard")), 400
 
     if request.method == "POST":
-        # Check if pre-packaged sample bundle was requested
+        # Handle legacy or sample bundle submission
         use_sample = request.form.get("use_sample_bundle") == "1"
         files = []
 
         if use_sample:
-            sample_dir = os.path.join(os.path.dirname(__file__), "sample_data", "bidders", "bidder_a")
-            if os.path.exists(sample_dir):
-                from services.seed_data import FileStorageMock
-                for fname in os.listdir(sample_dir):
-                    if fname.lower().endswith(".pdf"):
-                        fpath = os.path.join(sample_dir, fname)
-                        files.append(FileStorageMock(fpath, fname))
+            return redirect(url_for("upload_sample_bundle", tender_id=tender_id), code=307)
         else:
             files = request.files.getlist("documents")
 
-        if not files:
+        if not files or not files[0].filename:
             flash("No documents selected for submission.", "error")
-            return render_template("upload.html", tender=tender)
+            return redirect(url_for("bid_submit", tender_id=tender_id))
 
-        # Ingest multi-documents independently
         save_and_process_uploaded_documents(
             bidder_id=bidder["id"],
             tender_id=tender_id,
             files_list=files
         )
 
-        # Run verification engine
         ver_res = run_bidder_verification(tender_id, bidder["id"])
-
         log_audit_event(
             "BID_SUBMITTED", "tenders", tender_id,
-            f"Bidder #{bidder['id']} ({bidder['company_name']}) submitted {len(files)} docs. Ver score: {ver_res['score']}"
+            f"Bidder #{bidder['id']} ({bidder['company_name']}) uploaded {len(files)} docs. Ver score: {ver_res['score']}"
         )
+        flash("Documents uploaded and verified successfully.", "success")
+        return redirect(url_for("bid_submit", tender_id=tender_id))
 
-        flash("Bid submitted successfully! Automated compliance verification completed.", "success")
-        return redirect(url_for("view_report", tender_id=tender_id, bidder_id=bidder["id"]))
+    checklist_data = get_bidder_document_checklist(tender_id, bidder["id"])
+    return render_template(
+        "upload.html",
+        tender=checklist_data["tender"],
+        requirements=checklist_data["requirements"],
+        summary=checklist_data["summary"],
+        latest_verification=checklist_data["latest_verification"]
+    )
 
-    return render_template("upload.html", tender=tender)
+@app.route("/bids/<int:tender_id>/documents", methods=["POST"])
+@login_required
+@role_required("bidder")
+def upload_requirement_document(tender_id):
+    """
+    Handles individual requirement document uploads with versioning,
+    OCR status verification, and classification checking.
+    """
+    user_id = session.get("user_id")
+    bidder = query_db("SELECT * FROM bidders WHERE user_id = ?", (user_id,), one=True)
+    tender = query_db("SELECT * FROM tenders WHERE id = ?", (tender_id,), one=True)
+
+    if not bidder or not tender:
+        abort(404, description="Tender or Bidder profile not found.")
+
+    is_open, msg = is_bidding_open(tender_id)
+    if not is_open:
+        if request.is_json or "application/json" in request.headers.get("Accept", ""):
+            return jsonify({"success": False, "error": f"Submission rejected: {msg}"}), 400
+        flash(f"Submission rejected: {msg}", "error")
+        return redirect(url_for("bid_submit", tender_id=tender_id))
+
+    req_id_raw = request.form.get("requirement_id")
+    if not req_id_raw:
+        if request.is_json or "application/json" in request.headers.get("Accept", ""):
+            return jsonify({"success": False, "error": "Requirement ID is required."}), 400
+        flash("Requirement selection is required.", "error")
+        return redirect(url_for("bid_submit", tender_id=tender_id))
+
+    try:
+        req_id = int(req_id_raw)
+    except ValueError:
+        flash("Invalid requirement identifier.", "error")
+        return redirect(url_for("bid_submit", tender_id=tender_id))
+
+    file_obj = request.files.get("document") or request.files.get("file")
+    if not file_obj or not file_obj.filename:
+        if request.is_json or "application/json" in request.headers.get("Accept", ""):
+            return jsonify({"success": False, "error": "Please select a valid PDF document to upload."}), 400
+        flash("Please select a valid PDF document to upload.", "error")
+        return redirect(url_for("bid_submit", tender_id=tender_id))
+
+    replace_doc_id_raw = request.form.get("replace_document_id")
+    replace_doc_id = int(replace_doc_id_raw) if replace_doc_id_raw and replace_doc_id_raw.isdigit() else None
+
+    success, result = save_requirement_document(
+        bidder_id=bidder["id"],
+        tender_id=tender_id,
+        requirement_id=req_id,
+        file_obj=file_obj,
+        replace_document_id=replace_doc_id
+    )
+
+    if not success:
+        if request.is_json or "application/json" in request.headers.get("Accept", ""):
+            return jsonify({"success": False, "error": result}), 400
+        flash(f"Upload failed: {result}", "error")
+        return redirect(url_for("bid_submit", tender_id=tender_id))
+
+    doc_info = result
+    ver_res = run_bidder_verification(tender_id, bidder["id"])
+
+    log_audit_event(
+        "DOCUMENT_UPLOADED", "documents", doc_info["id"],
+        f"Bidder #{bidder['id']} uploaded '{doc_info['original_filename']}' (v{doc_info['version']}) for requirement #{req_id}."
+    )
+
+    if request.is_json or "application/json" in request.headers.get("Accept", ""):
+        return jsonify({
+            "success": True,
+            "document": doc_info,
+            "verification": ver_res
+        })
+
+    if doc_info.get("classification_status") == "WRONG_DOCUMENT_TYPE":
+        flash(f"Document uploaded as v{doc_info['version']}, but flagged: {doc_info.get('classification_warning')}", "warning")
+    elif doc_info.get("ocr_status") == "FAILED":
+        flash(f"Document uploaded as v{doc_info['version']}, but OCR text extraction failed. Marked for officer review.", "warning")
+    else:
+        flash(f"Document '{doc_info['original_filename']}' uploaded successfully as Version {doc_info['version']}.", "success")
+
+    return redirect(url_for("bid_submit", tender_id=tender_id))
+
+@app.route("/bids/<int:tender_id>/sample-bundle", methods=["POST"])
+@login_required
+@role_required("bidder")
+def upload_sample_bundle(tender_id):
+    """
+    One-click evaluation helper: Maps pre-packaged sample documents
+    directly to the tender's requirements and runs verification.
+    """
+    user_id = session.get("user_id")
+    bidder = query_db("SELECT * FROM bidders WHERE user_id = ?", (user_id,), one=True)
+    tender = query_db("SELECT * FROM tenders WHERE id = ?", (tender_id,), one=True)
+
+    if not bidder or not tender:
+        abort(404)
+
+    is_open, msg = is_bidding_open(tender_id)
+    if not is_open:
+        flash(f"Submission rejected: {msg}", "error")
+        return redirect(url_for("bid_submit", tender_id=tender_id))
+
+    sample_dir = os.path.join(os.path.dirname(__file__), "sample_data", "bidders", "bidder_a")
+    if not os.path.exists(sample_dir):
+        flash("Sample bidder bundle not found on server.", "error")
+        return redirect(url_for("bid_submit", tender_id=tender_id))
+
+    reqs = query_db("SELECT * FROM requirements WHERE tender_id = ?", (tender_id,))
+    from services.seed_data import FileStorageMock
+    uploaded_count = 0
+
+    # Sample file to requirement code mapping
+    file_req_map = {
+        "GST_Certificate.pdf": "REQ_GST",
+        "GSTR1_Return_FY2025_Q4.pdf": "REQ_GST",
+        "PAN_Card.pdf": "REQ_PAN",
+        "ITR_FY2023_24.pdf": "REQ_TURNOVER",
+        "ITR_FY2024_25.pdf": "REQ_TURNOVER",
+        "ITR_FY2025_26.pdf": "REQ_TURNOVER",
+        "Work_Order_1_BSNL.pdf": "REQ_EXPERIENCE",
+        "Completion_Certificate_BSNL.pdf": "REQ_EXPERIENCE",
+        "Work_Order_2_RailTel.pdf": "REQ_EXPERIENCE",
+        "OEM_Authorization_Cisco.pdf": "REQ_OEM",
+        "Local_Content_Declaration.pdf": "REQ_MII",
+        "Udyam_Registration_Certificate.pdf": "REQ_UDYAM",
+        "BIS_CRS_Registration.pdf": "REQ_BIS"
+    }
+
+    req_by_code = {r["code"]: r["id"] for r in reqs}
+
+    for fname, target_code in file_req_map.items():
+        fpath = os.path.join(sample_dir, fname)
+        if os.path.exists(fpath) and target_code in req_by_code:
+            req_id = req_by_code[target_code]
+            mock_file = FileStorageMock(fpath, fname)
+            save_requirement_document(
+                bidder_id=bidder["id"],
+                tender_id=tender_id,
+                requirement_id=req_id,
+                file_obj=mock_file
+            )
+            uploaded_count += 1
+
+    ver_res = run_bidder_verification(tender_id, bidder["id"])
+    log_audit_event("SAMPLE_BUNDLE_INGESTED", "tenders", tender_id, f"Ingested {uploaded_count} sample docs for bidder #{bidder['id']}")
+    flash(f"Pre-packaged sample document bundle ({uploaded_count} files) loaded and verified successfully!", "success")
+    return redirect(url_for("bid_submit", tender_id=tender_id))
+
+@app.route("/bids/<int:tender_id>/finalize", methods=["POST"])
+@login_required
+@role_required("bidder")
+def bid_finalize(tender_id):
+    """
+    Finalizes the bid submission and redirects to the full compliance report.
+    """
+    user_id = session.get("user_id")
+    bidder = query_db("SELECT * FROM bidders WHERE user_id = ?", (user_id,), one=True)
+    if not bidder:
+        abort(403)
+
+    checklist_data = get_bidder_document_checklist(tender_id, bidder["id"])
+    summary = checklist_data["summary"]
+
+    if summary["missing_mandatory"] > 0:
+        flash(f"Warning: {summary['missing_mandatory']} mandatory requirement(s) do not have documents uploaded.", "warning")
+
+    ver_res = run_bidder_verification(tender_id, bidder["id"])
+    log_audit_event(
+        "BID_SUBMITTED", "tenders", tender_id,
+        f"Bidder #{bidder['id']} finalized submission. Score: {ver_res['score']}"
+    )
+    flash("Bid finalized successfully! Evaluation report generated.", "success")
+    return redirect(url_for("view_report", tender_id=tender_id, bidder_id=bidder["id"]))
+
+@app.route("/bids/<int:tender_id>/checklist-data")
+@login_required
+def get_checklist_json(tender_id):
+    """
+    Returns live JSON checklist state for interactive components.
+    """
+    user_id = session.get("user_id")
+    user_role = session.get("user_role")
+
+    if user_role == "bidder":
+        bidder = query_db("SELECT id FROM bidders WHERE user_id = ?", (user_id,), one=True)
+        bidder_id = bidder["id"] if bidder else None
+    else:
+        bidder_id = request.args.get("bidder_id", type=int)
+
+    if not bidder_id:
+        return jsonify({"error": "Bidder not specified"}), 400
+
+    checklist = get_bidder_document_checklist(tender_id, bidder_id)
+    return jsonify(checklist)
 
 # -------------------------------------------------------------------------
 # Verification & Audit Report Route

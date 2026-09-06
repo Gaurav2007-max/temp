@@ -52,17 +52,22 @@ def extract_pdf_content(file_path):
                 result["full_text"] = ocr_res["full_text"]
                 result["pages"] = ocr_res["pages"]
                 result["page_count"] = len(ocr_res["pages"]) or result["page_count"]
-                result["ocr_status"] = "VALID"  # Valid & verified via OCR
-                result["ocr_confidence"] = ocr_res.get("confidence", 0.88)
-                result["ocr_quality"] = "HIGH" if result["ocr_confidence"] >= 0.8 else "MEDIUM"
+                conf = ocr_res.get("confidence", 0.88)
+                result["ocr_confidence"] = conf
+                if conf >= 0.70:
+                    result["ocr_status"] = "SUCCESS"
+                    result["ocr_quality"] = "HIGH"
+                else:
+                    result["ocr_status"] = "NEEDS_REVIEW"
+                    result["ocr_quality"] = "MEDIUM"
                 result["extraction_method"] = "OCR"
             else:
-                # Scanned or empty, but OCR could not extract text
-                result["ocr_status"] = "NEEDS_REVIEW"
-                result["ocr_confidence"] = 0.40
+                # Scanned or empty, but OCR could not extract readable text
+                result["ocr_status"] = "FAILED"
+                result["ocr_confidence"] = 0.0
                 result["ocr_quality"] = "LOW"
                 result["extraction_method"] = "OCR_FAILED"
-                result["error"] = "Scanned document text could not be extracted with confidence. Officer review required."
+                result["error"] = "Scanned document text could not be extracted. OCR extraction failed."
         else:
             result["extraction_method"] = "TEXT"
             result["ocr_status"] = "VALID"
@@ -73,21 +78,22 @@ def extract_pdf_content(file_path):
         try:
             ocr_res = _run_real_ocr(file_path)
             if ocr_res and ocr_res.get("full_text") and len(ocr_res["full_text"].strip()) > 20:
+                conf = ocr_res.get("confidence", 0.85)
                 return {
                     "page_count": len(ocr_res["pages"]),
                     "full_text": ocr_res["full_text"],
                     "pages": ocr_res["pages"],
-                    "ocr_status": "VALID",
-                    "ocr_confidence": ocr_res.get("confidence", 0.85),
-                    "ocr_quality": "MEDIUM",
+                    "ocr_status": "SUCCESS" if conf >= 0.70 else "NEEDS_REVIEW",
+                    "ocr_confidence": conf,
+                    "ocr_quality": "HIGH" if conf >= 0.70 else "MEDIUM",
                     "extraction_method": "OCR",
                     "error": None
                 }
         except Exception:
             pass
 
-        result["ocr_status"] = "NEEDS_REVIEW"
-        result["ocr_confidence"] = 0.30
+        result["ocr_status"] = "FAILED"
+        result["ocr_confidence"] = 0.0
         result["ocr_quality"] = "LOW"
         result["extraction_method"] = "FAILED"
         result["error"] = str(e)

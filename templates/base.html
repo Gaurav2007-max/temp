@@ -43,12 +43,12 @@
           {% if current_user %}
             {% if current_user.role == 'admin' %}
               <a href="/admin" class="px-3 py-1.5 rounded-md text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 transition">Admin Dashboard</a>
+              <a href="/tenders/import" class="px-3 py-1.5 rounded-md text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white transition">Import GeM Bid</a>
               <a href="/admin/officers" class="px-3 py-1.5 rounded-md text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 transition">Officers</a>
               <a href="/admin/assignments" class="px-3 py-1.5 rounded-md text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 transition">Assignments</a>
               <a href="/api/status" class="px-3 py-1.5 rounded-md text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 transition">Statutory APIs</a>
             {% elif current_user.role == 'officer' %}
               <a href="/officer" class="px-3 py-1.5 rounded-md text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 transition">Dashboard</a>
-              <a href="/tenders/import" class="px-3 py-1.5 rounded-md text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white transition">Import GeM Bid</a>
             {% elif current_user.role == 'bidder' %}
               <a href="/bidder" class="px-3 py-1.5 rounded-md text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 transition">My Dashboard</a>
             {% endif %}

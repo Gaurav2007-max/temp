@@ -104,12 +104,17 @@ CREATE TABLE IF NOT EXISTS documents (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     bidder_id INTEGER NOT NULL,
     tender_id INTEGER NOT NULL,
+    requirement_id INTEGER,
+    version INTEGER DEFAULT 1,
+    is_current INTEGER DEFAULT 1,
+    replaced_document_id INTEGER,
     original_filename TEXT NOT NULL,
     storage_filename TEXT NOT NULL,
     storage_path TEXT NOT NULL,
     file_size INTEGER DEFAULT 0,
     mime_type TEXT,
     doc_type TEXT NOT NULL,
+    classification_status TEXT DEFAULT 'VALID' CHECK(classification_status IN ('VALID', 'WRONG_DOCUMENT_TYPE', 'NEEDS_REVIEW', 'UNKNOWN')),
     is_supplementary INTEGER DEFAULT 0,
     clarification_id INTEGER,
     extracted_text TEXT,
@@ -121,7 +126,9 @@ CREATE TABLE IF NOT EXISTS documents (
     extraction_method TEXT DEFAULT 'TEXT',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (bidder_id) REFERENCES bidders(id) ON DELETE CASCADE,
-    FOREIGN KEY (tender_id) REFERENCES tenders(id) ON DELETE CASCADE
+    FOREIGN KEY (tender_id) REFERENCES tenders(id) ON DELETE CASCADE,
+    FOREIGN KEY (requirement_id) REFERENCES requirements(id) ON DELETE SET NULL,
+    FOREIGN KEY (replaced_document_id) REFERENCES documents(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS verifications (
@@ -226,14 +233,26 @@ def close_db(e=None):
 def init_db(db_path=None):
     conn = get_db_connection(db_path)
     try:
+        # First ensure schema tables exist
         conn.executescript(SCHEMA_SQL)
         # Apply non-destructive column migrations for documents and requirements
         cols = [r[1] for r in conn.execute("PRAGMA table_info(documents)").fetchall()]
         if "extraction_method" not in cols:
             conn.execute("ALTER TABLE documents ADD COLUMN extraction_method TEXT DEFAULT 'TEXT'")
+        if "requirement_id" not in cols:
+            conn.execute("ALTER TABLE documents ADD COLUMN requirement_id INTEGER")
+        if "version" not in cols:
+            conn.execute("ALTER TABLE documents ADD COLUMN version INTEGER DEFAULT 1")
+        if "is_current" not in cols:
+            conn.execute("ALTER TABLE documents ADD COLUMN is_current INTEGER DEFAULT 1")
+        if "replaced_document_id" not in cols:
+            conn.execute("ALTER TABLE documents ADD COLUMN replaced_document_id INTEGER")
+        if "classification_status" not in cols:
+            conn.execute("ALTER TABLE documents ADD COLUMN classification_status TEXT DEFAULT 'VALID'")
         req_cols = [r[1] for r in conn.execute("PRAGMA table_info(requirements)").fetchall()]
         if "structured_criteria" not in req_cols:
             conn.execute("ALTER TABLE requirements ADD COLUMN structured_criteria TEXT")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_documents_req ON documents(bidder_id, tender_id, requirement_id, is_current);")
         conn.commit()
     finally:
         conn.close()
