@@ -606,7 +606,17 @@ def tender_detail(tender_id):
         if not is_assigned:
             abort(403, description="You are not authorized to evaluate this tender.")
 
-    requirements = query_db("SELECT * FROM requirements WHERE tender_id = ? ORDER BY id ASC", (tender_id,))
+    requirements = query_db(
+        """
+        SELECT * FROM requirements
+        WHERE tender_id = ?
+          AND (tender_version_id = (SELECT id FROM tender_versions WHERE tender_id = ? ORDER BY id DESC LIMIT 1)
+               OR tender_version_id IS NULL)
+        GROUP BY code
+        ORDER BY id ASC
+        """,
+        (tender_id, tender_id)
+    )
     versions = query_db("SELECT * FROM tender_versions WHERE tender_id = ? ORDER BY id ASC", (tender_id,))
     clarifications = get_clarifications_by_tender(tender_id)
 

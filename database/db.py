@@ -82,6 +82,7 @@ CREATE TABLE IF NOT EXISTS requirements (
     threshold_value REAL,
     threshold_unit TEXT,
     expected_doc_types TEXT,
+    structured_criteria TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (tender_id) REFERENCES tenders(id) ON DELETE CASCADE,
     FOREIGN KEY (tender_version_id) REFERENCES tender_versions(id)
@@ -113,10 +114,11 @@ CREATE TABLE IF NOT EXISTS documents (
     clarification_id INTEGER,
     extracted_text TEXT,
     extracted_fields TEXT,
-    ocr_status TEXT DEFAULT 'VALID' CHECK(ocr_status IN ('VALID', 'WARNING', 'NEEDS_REVIEW', 'INVALID')),
+    ocr_status TEXT DEFAULT 'VALID' CHECK(ocr_status IN ('VALID', 'WARNING', 'NEEDS_REVIEW', 'INVALID', 'SUCCESS', 'FAILED', 'NOT_REQUIRED')),
     ocr_confidence REAL DEFAULT 1.0,
     ocr_quality TEXT DEFAULT 'HIGH',
     page_count INTEGER DEFAULT 1,
+    extraction_method TEXT DEFAULT 'TEXT',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (bidder_id) REFERENCES bidders(id) ON DELETE CASCADE,
     FOREIGN KEY (tender_id) REFERENCES tenders(id) ON DELETE CASCADE
@@ -148,7 +150,7 @@ CREATE TABLE IF NOT EXISTS verification_requirements (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     verification_id INTEGER NOT NULL,
     requirement_id INTEGER NOT NULL,
-    status TEXT NOT NULL CHECK(status IN ('COMPLIANT', 'NON_COMPLIANT', 'NEEDS_REVIEW', 'WARNING', 'UNAVAILABLE')),
+    status TEXT NOT NULL CHECK(status IN ('COMPLIANT', 'NON_COMPLIANT', 'NEEDS_REVIEW', 'WARNING', 'UNAVAILABLE', 'PASS', 'FAIL', 'NOT_APPLICABLE')),
     is_mandatory INTEGER DEFAULT 1,
     score_awarded REAL DEFAULT 0,
     max_score REAL DEFAULT 10,
@@ -225,6 +227,13 @@ def init_db(db_path=None):
     conn = get_db_connection(db_path)
     try:
         conn.executescript(SCHEMA_SQL)
+        # Apply non-destructive column migrations for documents and requirements
+        cols = [r[1] for r in conn.execute("PRAGMA table_info(documents)").fetchall()]
+        if "extraction_method" not in cols:
+            conn.execute("ALTER TABLE documents ADD COLUMN extraction_method TEXT DEFAULT 'TEXT'")
+        req_cols = [r[1] for r in conn.execute("PRAGMA table_info(requirements)").fetchall()]
+        if "structured_criteria" not in req_cols:
+            conn.execute("ALTER TABLE requirements ADD COLUMN structured_criteria TEXT")
         conn.commit()
     finally:
         conn.close()

@@ -13,6 +13,90 @@
       }
     },
     {
+      "pan": "AABCV8811K",
+      "name": "VANGUARD INFRA SYSTEMS PRIVATE LIMITED",
+      "status": "Active",
+      "entity_type": "Company",
+      "aadhaar_linked": true,
+      "it_compliance": {
+        "itr_filed_fy2425": false,
+        "tax_dues": 150000,
+        "last_assessment_year": "2023-24"
+      }
+    },
+    {
+      "pan": "AAACA7722M",
+      "name": "APEX TELECOM SOLUTIONS LLP",
+      "status": "Active",
+      "entity_type": "Firm/LLP",
+      "aadhaar_linked": true,
+      "it_compliance": {
+        "itr_filed_fy2425": true,
+        "tax_dues": 0,
+        "last_assessment_year": "2024-25"
+      }
+    },
+    {
+      "pan": "AABCD4433P",
+      "name": "DELTA TECH VENTURES PRIVATE LIMITED",
+      "status": "Active",
+      "entity_type": "Company",
+      "aadhaar_linked": true,
+      "it_compliance": {
+        "itr_filed_fy2425": true,
+        "tax_dues": 0,
+        "last_assessment_year": "2024-25"
+      }
+    },
+    {
+      "pan": "AAACE5544Q",
+      "name": "ELEVATE NETWORKS & TELECOM LLP",
+      "status": "Active",
+      "entity_type": "Firm/LLP",
+      "aadhaar_linked": true,
+      "it_compliance": {
+        "itr_filed_fy2425": true,
+        "tax_dues": 0,
+        "last_assessment_year": "2024-25"
+      }
+    },
+    {
+      "pan": "AABCF6655R",
+      "name": "FRONTIER SYSTEMS & TECHNOLOGIES PRIVATE LIMITED",
+      "status": "Active",
+      "entity_type": "Company",
+      "aadhaar_linked": true,
+      "it_compliance": {
+        "itr_filed_fy2425": true,
+        "tax_dues": 0,
+        "last_assessment_year": "2024-25"
+      }
+    },
+    {
+      "pan": "AABCG7766S",
+      "name": "GLOBAL COMPUTING SOLUTIONS INDIA PRIVATE LIMITED",
+      "status": "Active",
+      "entity_type": "Company",
+      "aadhaar_linked": true,
+      "it_compliance": {
+        "itr_filed_fy2425": true,
+        "tax_dues": 0,
+        "last_assessment_year": "2024-25"
+      }
+    },
+    {
+      "pan": "AABCH8877T",
+      "name": "HORIZON NETWORKS PRIVATE LIMITED",
+      "status": "Active",
+      "entity_type": "Company",
+      "aadhaar_linked": true,
+      "it_compliance": {
+        "itr_filed_fy2425": true,
+        "tax_dues": 0,
+        "last_assessment_year": "2024-25"
+      }
+    },
+    {
       "pan": "AAACP1234A",
       "name": "PRECISION COMPONENTS INDIA LLP",
       "status": "Active",

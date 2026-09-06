@@ -75,27 +75,84 @@ def create_tender(gem_bid_id, title, organization, category, description="", est
     for tmpl in DEFAULT_REQUIREMENT_TEMPLATES:
         threshold = None
         unit = None
+        criteria_dict = {}
+
         if tmpl["code"] == "REQ_TURNOVER":
             threshold = min_turnover
             unit = "INR"
+            criteria_dict = {
+                "min_turnover_inr": min_turnover,
+                "required_financial_years": ["FY2023-24", "FY2024-25", "FY2025-26"],
+                "calculation_method": "AVERAGE_LAST_3_YEARS",
+                "description": f"Minimum average annual turnover of ₹{min_turnover:,.2f} over the required financial years (FY2023-24, FY2024-25, FY2025-26)."
+            }
         elif tmpl["code"] == "REQ_MII":
             threshold = min_local_content
             unit = "PERCENT"
+            criteria_dict = {
+                "min_local_content_percentage": min_local_content,
+                "supplier_class": "Class-I Local Supplier (>=50%)",
+                "description": f"Self-declaration of at least {min_local_content}% local content under Make in India policy."
+            }
         elif tmpl["code"] == "REQ_EXPERIENCE":
             threshold = min_projects_count
             unit = "PROJECTS"
+            criteria_dict = {
+                "min_projects_count": min_projects_count,
+                "min_cumulative_project_value": min_cumulative_project_value,
+                "require_completion": True,
+                "description": f"Minimum {min_projects_count} successfully completed project(s) with cumulative value of at least ₹{min_cumulative_project_value:,.2f}."
+            }
+        elif tmpl["code"] == "REQ_OEM":
+            criteria_dict = {
+                "require_oem_match": True,
+                "require_bidder_match": True,
+                "require_unexpired": True,
+                "warning_days_threshold": 30,
+                "description": "Manufacturer Authorization Form (MAF) from OEM explicitly naming bidder, with unexpired validity."
+            }
+        elif tmpl["code"] == "REQ_GST":
+            criteria_dict = {
+                "require_active": True,
+                "cross_check_pan": True,
+                "description": "Active GSTIN registration in good standing with periodic returns filed."
+            }
+        elif tmpl["code"] == "REQ_PAN":
+            criteria_dict = {
+                "cross_check_gstin": True,
+                "cross_check_name": True,
+                "description": "Valid Permanent Account Number matching bidder legal entity."
+            }
+        elif tmpl["code"] == "REQ_BIS":
+            criteria_dict = {
+                "check_standard": True,
+                "description": "Valid BIS license / CRS registration for supplied hardware/products."
+            }
+        elif tmpl["code"] == "REQ_UDYAM":
+            criteria_dict = {
+                "preferential_benefit": True,
+                "cross_check_pan": True,
+                "description": "Active Udyam / MSME registration for purchase/price preference eligibility."
+            }
+        elif tmpl["code"] == "REQ_BLACKLIST":
+            criteria_dict = {
+                "strict_rejection": True,
+                "description": "Declaration and statutory verification confirming non-debarment by GeM/CVC."
+            }
 
         execute_db(
             """
             INSERT INTO requirements (
                 tender_id, tender_version_id, code, title, description,
-                requirement_type, is_mandatory, threshold_value, threshold_unit, expected_doc_types
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                requirement_type, is_mandatory, threshold_value, threshold_unit, expected_doc_types,
+                structured_criteria
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 tender_id, v1_id, tmpl["code"], tmpl["title"],
                 f"Tender compliance check for {tmpl['title']}",
-                tmpl["type"], tmpl["mandatory"], threshold, unit, tmpl["docs"]
+                tmpl["type"], tmpl["mandatory"], threshold, unit, tmpl["docs"],
+                json.dumps(criteria_dict)
             )
         )
 

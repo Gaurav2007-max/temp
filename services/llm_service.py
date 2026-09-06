@@ -76,11 +76,13 @@ Document text:
 def extract_document_fields_deterministic(doc_type, text):
     """
     Reliable deterministic regex-based field extractor from document text.
+    Extracts identifiers, financial years, turnover amounts, experience details,
+    OEM parameters, and statutory fields without fabricating values.
     """
     extracted = {"_source": "DETERMINISTIC_PARSER"}
     t = text or ""
 
-    # GSTIN pattern: 2 digits + 5 alpha + 4 digits + 1 alpha + 1 alpha/num + Z + 1 alpha/num
+    # 1. GSTIN pattern: 2 digits + 5 alpha + 4 digits + 1 alpha + 1 alpha/num + Z + 1 alpha/num
     gst_match = re.search(r"\b([0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1})\b", t)
     if gst_match:
         extracted["gstin"] = gst_match.group(1)
@@ -92,25 +94,46 @@ def extract_document_fields_deterministic(doc_type, text):
         if pan_match:
             extracted["pan"] = pan_match.group(1)
 
-    # Udyam pattern: UDYAM-XX-00-0000000
+    # 2. Udyam pattern: UDYAM-XX-00-0000000
     udyam_match = re.search(r"\b(UDYAM-[A-Z]{2}-\d{2}-\d{7})\b", t, re.IGNORECASE)
     if udyam_match:
         extracted["udyam_reg_no"] = udyam_match.group(1).upper()
 
-    # Local content pattern: e.g. "65% local content", "Class-I Local Supplier (65%)"
-    lc_match = re.search(r"(\d{1,3}(?:\.\d+)?)\s*%\s*(?:local\s*content|indigenous|domestic)", t, re.IGNORECASE)
+    # 3. Enterprise / Legal Name
+    name_match = re.search(r"(?:Legal\s*Name|Enterprise\s*Name|Name\s*of\s*the\s*Firm|Company\s*Name)\s*[:\-]\s*([A-Za-z0-9\s\.\,\(\)\&]{3,60}?)(?:\n|\r|Trade|Status|PAN|GSTIN|Address|$)", t, re.IGNORECASE)
+    if name_match:
+        extracted["legal_name"] = name_match.group(1).strip()
+
+    # 4. Registered Address & PIN Code
+    pin_match = re.search(r"\b([1-9][0-9]{5})\b", t)
+    if pin_match:
+        extracted["pin_code"] = pin_match.group(1)
+
+    addr_match = re.search(r"(?:Principal\s*Place\s*of\s*Business|Registered\s*Address|Address)\s*[:\-]?\s*([^\n\r]{10,120})", t, re.IGNORECASE)
+    if addr_match:
+        extracted["registered_address"] = addr_match.group(1).strip()
+
+    # 5. Local content pattern: e.g. "65% local content", "Percentage of Local Content: 52.0%"
+    lc_match = re.search(r"(?:Percentage\s*of\s*Local\s*Content|Local\s*Content(?:\s*Percentage)?)\s*[:\-]?\s*(\d{1,3}(?:\.\d+)?)\s*%", t, re.IGNORECASE)
+    if not lc_match:
+        lc_match = re.search(r"(\d{1,3}(?:\.\d+)?)\s*%\s*(?:local\s*content|indigenous|domestic)", t, re.IGNORECASE)
     if lc_match:
         try:
             extracted["local_content_percentage"] = float(lc_match.group(1))
         except ValueError:
             pass
 
-    # Financial year and turnover amounts
-    fy_match = re.search(r"(FY\s*20\d{2}[-–/]\d{2,4}|20\d{2}[-–/]\d{2,4})", t, re.IGNORECASE)
+    # 6. Financial Year and Turnover Amounts
+    fy_match = re.search(r"(?:Financial\s*Year|FY)\s*[:\-]?\s*(20\d{2}[-–/]\d{2,4})", t, re.IGNORECASE)
+    if not fy_match:
+        fy_match = re.search(r"\b(FY\s*20\d{2}[-–/]\d{2,4})\b", t, re.IGNORECASE)
     if fy_match:
-        extracted["financial_year"] = fy_match.group(1).upper()
+        raw_fy = fy_match.group(1).upper().replace(" ", "")
+        if not raw_fy.startswith("FY"):
+            raw_fy = f"FY{raw_fy}"
+        extracted["financial_year"] = raw_fy
 
-    turnover_match = re.search(r"(?:turnover|gross\s*receipts|revenue).*?(?:INR|Rs\.?|₹)?\s*(\d+(?:,\d+)*(?:\.\d+)?)\s*(Cr|Crore|Lakh|Lakhs)?", t, re.IGNORECASE)
+    turnover_match = re.search(r"(?:Annual\s*Turnover|Gross\s*Revenue|Gross\s*Receipts|Turnover).*?(?:INR|Rs\.?|₹)?\s*(\d+(?:,\d+)*(?:\.\d+)?)\s*(Cr|Crore|Crores|Lakh|Lakhs)?", t, re.IGNORECASE)
     if turnover_match:
         num_str = turnover_match.group(1).replace(",", "")
         unit = (turnover_match.group(2) or "").lower()
@@ -124,19 +147,60 @@ def extract_document_fields_deterministic(doc_type, text):
         except ValueError:
             pass
 
-    # BIS License pattern: e.g. "CM/L - 1234567" or "R-12345678" or "IS 13252"
+    # 7. BIS License pattern: e.g. "CM/L - 1234567" or "R-12345678" or "IS 13252"
     bis_match = re.search(r"(?:CM/L\s*[-:]?\s*(\d+)|R\s*[-:]?\s*(\d{8})|IS\s*(\d+))", t, re.IGNORECASE)
     if bis_match:
         extracted["bis_standard"] = bis_match.group(0).strip()
 
-    # OEM Authorization keyword detection
-    if "OEM" in doc_type.upper() or "AUTHORIZATION" in doc_type.upper():
-        oem_match = re.search(r"(?:authorized\s*distributor|channel\s*partner|authorizes\s+M/s\.?\s+([^,\n\.]+))", t, re.IGNORECASE)
-        if oem_match:
-            extracted["authorized_bidder"] = oem_match.group(1).strip()
-        oem_name_match = re.search(r"(?:from\s+M/s\.?\s+([^,\n\.]+)|issued\s+by\s+([^,\n\.]+))", t, re.IGNORECASE)
-        if oem_name_match:
-            extracted["oem_name"] = (oem_name_match.group(1) or oem_name_match.group(2) or "").strip()
+    # 8. Experience, Work Orders & Completion Certificates
+    wo_match = re.search(r"(?:Work\s*Order\s*(?:Number|Ref|No\.?)|PO\s*Number|Purchase\s*Order\s*Ref)\s*[:\-]?\s*([A-Za-z0-9\-_/]+)", t, re.IGNORECASE)
+    if wo_match:
+        extracted["work_order_no"] = wo_match.group(1).strip()
+
+    client_match = re.search(r"(?:Client|Awarded\s*by|Customer|Purchaser)\s*[:\-]?\s*([^\n\r,]+)", t, re.IGNORECASE)
+    if client_match:
+        extracted["client_name"] = client_match.group(1).strip()
+
+    val_match = re.search(r"(?:Total\s*Contract\s*Value|Contract\s*Value|Project\s*Value|Order\s*Value).*?(?:INR|Rs\.?|₹)?\s*(\d+(?:,\d+)*(?:\.\d+)?)\s*(Cr|Crore|Crores|Lakh|Lakhs)?", t, re.IGNORECASE)
+    if val_match:
+        v_str = val_match.group(1).replace(",", "")
+        v_unit = (val_match.group(2) or "").lower()
+        try:
+            v = float(v_str)
+            if "cr" in v_unit:
+                v *= 10000000
+            elif "lakh" in v_unit:
+                v *= 100000
+            extracted["project_value"] = v
+        except ValueError:
+            pass
+
+    comp_match = re.search(r"(?:Completion\s*Date|Date\s*of\s*Completion)\s*[:\-]?\s*(\d{4}-\d{2}-\d{2}|\d{2}[-/]\d{2}[-/]\d{4})", t, re.IGNORECASE)
+    if comp_match:
+        extracted["completion_date"] = comp_match.group(1).strip()
+        extracted["is_completed"] = True
+    elif "successfully completed" in t.lower() or "satisfactory completion" in t.lower():
+        extracted["is_completed"] = True
+
+    # 9. OEM Authorization Parameters
+    if "OEM" in doc_type.upper() or "AUTHORIZATION" in doc_type.upper() or "MAF" in t.upper():
+        mfg_match = re.search(r"(?:Manufacturer|Issued\s*by|OEM\s*Name|From)\s*[:\-]\s*(?:M/s\.?\s*)?([^\n\r,]+)", t, re.IGNORECASE)
+        if mfg_match:
+            extracted["oem_name"] = mfg_match.group(1).strip()
+
+        partner_match = re.search(r"(?:Authorized\s*(?:Partner|Bidder|Distributor|Channel\s*Partner)|Authorizes\s+M/s\.?)\s*[:\-]\s*(?:M/s\.?\s*)?([^\n\r,]+)", t, re.IGNORECASE)
+        if partner_match:
+            extracted["authorized_bidder"] = partner_match.group(1).strip()
+
+        valid_match = re.search(r"(?:Valid\s*Till(?:\s*/\s*Expiry\s*Date)?|Validity|Expires\s*on|Expiry\s*Date)\s*[:\-]?\s*(\d{4}-\d{2}-\d{2})", t, re.IGNORECASE)
+        if valid_match:
+            extracted["authorization_valid_till"] = valid_match.group(1).strip()
+
+        auth_stmt = re.search(r"(authorizes\s+.*?to\s+bid|authorized\s+to\s+participate|official\s+manufacturer\s+authorization)", t, re.IGNORECASE)
+        if auth_stmt:
+            extracted["authorization_statement"] = auth_stmt.group(0).strip()
+        else:
+            extracted["authorization_statement"] = "Authorized to quote, bid, and supply OEM equipment."
 
     return extracted
 

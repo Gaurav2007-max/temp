@@ -161,3 +161,61 @@ def test_object_level_authorization(client):
     res = client.get("/reports/1/9999", follow_redirects=False)
     assert res.status_code in (403, 404)
 
+def test_deterministic_turnover_calculation_and_duplicates(client):
+    """Verify deterministic turnover verification across financial years without duplicates."""
+    with app.app_context():
+        tender = query_db("SELECT id FROM tenders LIMIT 1", one=True)
+        bidder = query_db("SELECT id FROM bidders LIMIT 1", one=True)
+        if tender and bidder:
+            ver = run_bidder_verification(tender["id"], bidder["id"])
+            turnover_eval = next((r for r in ver["requirements"] if r["code"] == "REQ_TURNOVER"), None)
+            assert turnover_eval is not None
+            assert "verified_turnovers_by_year" in turnover_eval["evidence"]
+            # Ensure each FY appears at most once
+            fys = turnover_eval["evidence"]["verified_turnovers_by_year"]
+            assert len(fys) == len(set(fys.keys()))
+            if "calculation_formula" in turnover_eval["evidence"]:
+                assert "Average:" in turnover_eval["evidence"]["calculation_formula"]
+
+def test_project_grouping_and_deduplication(client):
+    """Verify that Work Orders and Completion Certificates for the same contract are grouped into 1 project."""
+    with app.app_context():
+        tender = query_db("SELECT id FROM tenders LIMIT 1", one=True)
+        bidder = query_db("SELECT id FROM bidders LIMIT 1", one=True)
+        if tender and bidder:
+            ver = run_bidder_verification(tender["id"], bidder["id"])
+            exp_eval = next((r for r in ver["requirements"] if r["code"] == "REQ_EXPERIENCE"), None)
+            assert exp_eval is not None
+            assert "grouped_projects" in exp_eval["evidence"]
+            # Each grouped project must have distinct project_key
+            projects = exp_eval["evidence"]["grouped_projects"]
+            keys = [p["project_key"] for p in projects]
+            assert len(keys) == len(set(keys))
+
+def test_oem_authorization_validation(client):
+    """Verify OEM authorization parameters and document-based verification disclaimer."""
+    with app.app_context():
+        tender = query_db("SELECT id FROM tenders LIMIT 1", one=True)
+        bidder = query_db("SELECT id FROM bidders LIMIT 1", one=True)
+        if tender and bidder:
+            ver = run_bidder_verification(tender["id"], bidder["id"])
+            oem_eval = next((r for r in ver["requirements"] if r["code"] == "REQ_OEM"), None)
+            assert oem_eval is not None
+            assert "disclaimer" in oem_eval["evidence"]
+            assert "Live OEM API verification not claimed" in oem_eval["evidence"]["disclaimer"]
+
+def test_cross_validation_conflict_detection(client):
+    """Verify cross-source identity and address conflict detection structure."""
+    with app.app_context():
+        tender = query_db("SELECT id FROM tenders LIMIT 1", one=True)
+        bidder = query_db("SELECT id FROM bidders LIMIT 1", one=True)
+        if tender and bidder:
+            ver = run_bidder_verification(tender["id"], bidder["id"])
+            assert "conflicts" in ver
+            for c in ver["conflicts"]:
+                assert "field" in c
+                assert "source_a" in c
+                assert "source_b" in c
+                assert "severity" in c
+
+

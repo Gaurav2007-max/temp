@@ -17,6 +17,118 @@
       }
     },
     {
+      "gstin": "07AABCV8811K1Z3",
+      "legal_name": "Vanguard Infra Systems Private Limited",
+      "trade_name": "Vanguard Infra",
+      "registration_date": "2020-02-14",
+      "status": "Cancelled",
+      "taxpayer_type": "Regular",
+      "state": "Delhi",
+      "address": "B-44, Naraina Industrial Area Phase I, New Delhi 110028",
+      "returns": {
+        "gstr1_filed": false,
+        "gstr3b_filed": false,
+        "last_return_period": "2025-10",
+        "pending_returns": 8
+      }
+    },
+    {
+      "gstin": "06AAACA7722M1Z8",
+      "legal_name": "Apex Telecom Solutions LLP",
+      "trade_name": "Apex Telecom",
+      "registration_date": "2019-11-05",
+      "status": "Active",
+      "taxpayer_type": "Regular",
+      "state": "Haryana",
+      "address": "Udyog Vihar Phase IV, Gurugram 122015",
+      "returns": {
+        "gstr1_filed": true,
+        "gstr3b_filed": true,
+        "last_return_period": "2026-07",
+        "pending_returns": 0
+      }
+    },
+    {
+      "gstin": "07AABCD4433P1Z9",
+      "legal_name": "Delta Tech Ventures Private Limited",
+      "trade_name": "Delta Tech",
+      "registration_date": "2021-03-20",
+      "status": "Active",
+      "taxpayer_type": "Regular",
+      "state": "Delhi",
+      "address": "Connaught Place, New Delhi 110001",
+      "returns": {
+        "gstr1_filed": true,
+        "gstr3b_filed": true,
+        "last_return_period": "2026-07",
+        "pending_returns": 0
+      }
+    },
+    {
+      "gstin": "27AAACE5544Q1Z1",
+      "legal_name": "Elevate Networks & Telecom LLP",
+      "trade_name": "Elevate Networks",
+      "registration_date": "2018-09-12",
+      "status": "Active",
+      "taxpayer_type": "Regular",
+      "state": "Maharashtra",
+      "address": "BKC Bandra East, Mumbai 400051",
+      "returns": {
+        "gstr1_filed": true,
+        "gstr3b_filed": true,
+        "last_return_period": "2026-07",
+        "pending_returns": 0
+      }
+    },
+    {
+      "gstin": "07AABCF6655R1Z2",
+      "legal_name": "Frontier Systems & Technologies Private Limited",
+      "trade_name": "Frontier Systems",
+      "registration_date": "2019-05-18",
+      "status": "Active",
+      "taxpayer_type": "Regular",
+      "state": "Delhi",
+      "address": "Sector 18, Commercial Zone, Noida, UP 201301",
+      "returns": {
+        "gstr1_filed": true,
+        "gstr3b_filed": true,
+        "last_return_period": "2026-07",
+        "pending_returns": 0
+      }
+    },
+    {
+      "gstin": "07AABCG7766S1Z4",
+      "legal_name": "Global Computing Solutions India Private Limited",
+      "trade_name": "Global Computing",
+      "registration_date": "2020-07-22",
+      "status": "Active",
+      "taxpayer_type": "Regular",
+      "state": "Delhi",
+      "address": "Nehru Place, New Delhi 110019",
+      "returns": {
+        "gstr1_filed": true,
+        "gstr3b_filed": true,
+        "last_return_period": "2026-07",
+        "pending_returns": 0
+      }
+    },
+    {
+      "gstin": "07AABCH8877T1Z6",
+      "legal_name": "Horizon Networks Private Limited",
+      "trade_name": "Horizon Net",
+      "registration_date": "2017-08-30",
+      "status": "Active",
+      "taxpayer_type": "Regular",
+      "state": "Delhi",
+      "address": "Patparganj Industrial Area, Delhi 110092",
+      "returns": {
+        "gstr1_filed": true,
+        "gstr3b_filed": true,
+        "last_return_period": "2026-07",
+        "pending_returns": 0
+      }
+    },
+    {
       "gstin": "27AAACP1234A1Z5",
       "legal_name": "Precision Components India LLP",
       "trade_name": "Precision Components",
