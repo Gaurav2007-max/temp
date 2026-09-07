@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+
+{% block title %}Document Repository - GeM Compliance{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+  <div>
+    <h1 class="text-2xl font-bold text-slate-900 tracking-tight">Uploaded Document Repository</h1>
+    <p class="text-xs text-slate-500 mt-1">Search current and historical bidder documents stored under the uploads directory.</p>
+  </div>
+
+  <form method="GET" action="/admin/documents" class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm grid sm:grid-cols-3 gap-3 items-end">
+    <label class="text-xs font-semibold text-slate-700">
+      Bidder name or company
+      <input name="bidder_name" value="{{ bidder_name }}" class="mt-1 w-full px-3 py-2 border border-slate-300 rounded text-sm" placeholder="Search bidder" />
+    </label>
+    <label class="text-xs font-semibold text-slate-700">
+      Document name
+      <input name="document_name" value="{{ document_name }}" class="mt-1 w-full px-3 py-2 border border-slate-300 rounded text-sm" placeholder="Search filename" />
+    </label>
+    <button type="submit" class="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold">Search documents</button>
+  </form>
+
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+    <div class="px-6 py-4 border-b border-slate-200 text-xs text-slate-500">{{ documents|length }} document(s) found</div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-xs text-slate-600">
+        <thead class="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200">
+          <tr>
+            <th class="px-6 py-3">Bidder</th>
+            <th class="px-6 py-3">Document</th>
+            <th class="px-6 py-3">Tender</th>
+            <th class="px-6 py-3">Version</th>
+            <th class="px-6 py-3 text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-200">
+          {% for document in documents %}
+          <tr class="hover:bg-slate-50">
+            <td class="px-6 py-4"><div class="font-semibold text-slate-900">{{ document.bidder_name }}</div><div class="text-[11px] text-slate-400">{{ document.company_name }}</div></td>
+            <td class="px-6 py-4"><div class="font-semibold text-slate-900">{{ document.original_filename }}</div><div class="text-[11px] text-slate-400">{{ document.doc_type }}</div></td>
+            <td class="px-6 py-4"><div class="font-mono text-blue-600">{{ document.gem_bid_id }}</div><div class="text-[11px] text-slate-400">{{ document.tender_title }}</div></td>
+            <td class="px-6 py-4">v{{ document.version }}{% if document.is_current %} <span class="text-emerald-600">current</span>{% endif %}</td>
+            <td class="px-6 py-4 text-right space-x-2"><a href="/documents/view/{{ document.id }}" target="_blank" class="text-blue-600 hover:underline font-semibold">View</a><a href="/admin/documents/{{ document.id }}/download" class="text-slate-700 hover:underline font-semibold">Download</a></td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="px-6 py-8 text-center text-slate-400">No matching documents found.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

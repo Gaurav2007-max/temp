@@ -62,19 +62,20 @@ class IFrameSecureSessionInterface(SecureCookieSessionInterface):
         return app.config["SESSION_COOKIE_SECURE"]
 
     def get_cookie_samesite(self, app):
-        return "None"
+        return app.config["SESSION_COOKIE_SAMESITE"]
 
     def get_cookie_partitioned(self, app):
-        return True
+        return app.config["SESSION_COOKIE_PARTITIONED"]
 
 app = Flask(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 app.session_interface = IFrameSecureSessionInterface()
 app.secret_key = os.environ.get("SECRET_KEY", "Hello@2026")
+cookie_secure = os.environ.get("COOKIE_SECURE", "0").lower() in ("1", "true", "yes", "on")
 app.config["SESSION_COOKIE_HTTPONLY"] = True
-app.config["SESSION_COOKIE_SECURE"] = os.environ.get("COOKIE_SECURE", "1").lower() in ("1", "true", "yes", "on")
-app.config["SESSION_COOKIE_SAMESITE"] = "None"
-app.config["SESSION_COOKIE_PARTITIONED"] = True
+app.config["SESSION_COOKIE_SECURE"] = cookie_secure
+app.config["SESSION_COOKIE_SAMESITE"] = "None" if cookie_secure else "Lax"
+app.config["SESSION_COOKIE_PARTITIONED"] = cookie_secure
 app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024 # 50 MB max payload
 
 # Token serializers for stateless resilience in iframes
@@ -121,6 +122,10 @@ def restore_session_from_token():
     restore user session from signed auth_token passed via query, form, or header.
     """
     if "user_id" in session:
+        return
+
+    # Do not immediately recreate the session on the logout landing page.
+    if request.path == "/logout" or (request.path == "/login" and request.args.get("logout") == "1"):
         return
 
     raw_token = (
@@ -258,10 +263,10 @@ def login():
             resp.set_cookie(
                 "gem_auth_token",
                 auth_token,
-                secure=True,
+                secure=app.config["SESSION_COOKIE_SECURE"],
                 httponly=False,
-                samesite="None",
-                partitioned=True,
+                samesite=app.config["SESSION_COOKIE_SAMESITE"],
+                partitioned=app.config["SESSION_COOKIE_PARTITIONED"],
                 max_age=7 * 86400
             )
             return resp
@@ -280,8 +285,14 @@ def logout():
     session.clear()
     flash("You have been signed out successfully.", "success")
     resp = make_response(redirect(url_for("login", logout=1)))
-    resp.delete_cookie("gem_auth_token", path="/")
-    resp.delete_cookie("session", path="/")
+    cookie_options = {
+        "path": "/",
+        "secure": app.config["SESSION_COOKIE_SECURE"],
+        "samesite": app.config["SESSION_COOKIE_SAMESITE"],
+        "partitioned": app.config["SESSION_COOKIE_PARTITIONED"],
+    }
+    resp.delete_cookie("gem_auth_token", **cookie_options)
+    resp.delete_cookie(app.config.get("SESSION_COOKIE_NAME", "session"), **cookie_options)
     return resp
 
 @app.route("/register", methods=["GET", "POST"])
@@ -367,10 +378,10 @@ def register():
         resp.set_cookie(
             "gem_auth_token",
             auth_token,
-            secure=True,
+            secure=app.config["SESSION_COOKIE_SECURE"],
             httponly=False,
-            samesite="None",
-            partitioned=True,
+            samesite=app.config["SESSION_COOKIE_SAMESITE"],
+            partitioned=app.config["SESSION_COOKIE_PARTITIONED"],
             max_age=7 * 86400
         )
         return resp
@@ -478,6 +489,60 @@ def admin_assignments():
         """
     )
     return render_template("admin_assignments.html", tenders=tenders, officers=officers, assignments=assignments)
+
+@app.route("/admin/documents")
+@login_required
+@role_required("admin")
+def admin_documents():
+    bidder_name = request.args.get("bidder_name", "").strip()
+    document_name = request.args.get("document_name", "").strip()
+    query = """
+        SELECT d.id, d.original_filename, d.storage_path, d.file_size, d.mime_type,
+               d.doc_type, d.version, d.is_current, d.created_at,
+               b.company_name, u.name AS bidder_name,
+               t.gem_bid_id, t.title AS tender_title
+        FROM documents d
+        JOIN bidders b ON b.id = d.bidder_id
+        JOIN users u ON u.id = b.user_id
+        JOIN tenders t ON t.id = d.tender_id
+        WHERE 1 = 1
+    """
+    params = []
+    if bidder_name:
+        query += " AND (u.name LIKE ? OR b.company_name LIKE ? OR u.email LIKE ?)"
+        bidder_pattern = f"%{bidder_name}%"
+        params.extend((bidder_pattern, bidder_pattern, bidder_pattern))
+    if document_name:
+        query += " AND d.original_filename LIKE ?"
+        params.append(f"%{document_name}%")
+    query += " ORDER BY d.created_at DESC, d.id DESC"
+    documents = query_db(query, params)
+    return render_template(
+        "admin_documents.html",
+        documents=documents,
+        bidder_name=bidder_name,
+        document_name=document_name
+    )
+
+@app.route("/admin/documents/<int:doc_id>/download")
+@login_required
+@role_required("admin")
+def admin_download_document(doc_id):
+    document = query_db(
+        "SELECT storage_path, original_filename, mime_type FROM documents WHERE id = ?",
+        (doc_id,),
+        one=True
+    )
+    if not document:
+        abort(404, description="Document artifact not found.")
+    if not os.path.isfile(document["storage_path"]):
+        abort(404, description="Physical document file missing from storage.")
+    return send_file(
+        document["storage_path"],
+        mimetype=document["mime_type"] or "application/pdf",
+        as_attachment=True,
+        download_name=document["original_filename"]
+    )
 
 @app.route("/admin/assignments/add", methods=["POST"])
 @login_required

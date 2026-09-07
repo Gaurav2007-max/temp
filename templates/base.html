@@ -59,7 +59,7 @@
                 <div class="text-xs font-semibold text-white">{{ current_user.name }}</div>
                 <div class="text-[11px] uppercase tracking-wider text-slate-400 font-mono">{{ current_user.role }}</div>
               </div>
-              <form action="/logout" method="POST" class="inline">
+              <form action="/logout" method="POST" class="inline" onsubmit="localStorage.removeItem('gem_auth_token');">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" class="px-3 py-1.5 text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800 rounded transition border border-slate-700">
                   Logout
