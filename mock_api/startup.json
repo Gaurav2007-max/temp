@@ -1,0 +1,82 @@
+{
+  "records": [
+    {
+      "dpiit_number": "DIPP98765",
+      "entity_name": "South India Digital Services",
+      "pan": "AADCS1234B",
+      "recognition_date": "2022-03-15",
+      "sector": "IT Services",
+      "status": "Recognised",
+      "certificate_valid": true
+    },
+    {
+      "dpiit_number": "DIPP11223",
+      "entity_name": "Bharat Tech Solutions Private Limited",
+      "pan": "AABCU9603R",
+      "recognition_date": "2021-09-01",
+      "sector": "Software Product",
+      "status": "Recognised",
+      "certificate_valid": true
+    }
+  ],
+  "nsic": [
+    {
+      "nsic_reg": "NSIC/GP/DL/2023/4412",
+      "entity_name": "Bharat Tech Solutions Private Limited",
+      "pan": "AABCU9603R",
+      "valid_till": "2027-03-31",
+      "status": "Valid",
+      "single_point_registration": true
+    },
+    {
+      "nsic_reg": "NSIC/GP/MH/2024/2201",
+      "entity_name": "Precision Components India LLP",
+      "pan": "AAACP1234A",
+      "valid_till": "2026-12-31",
+      "status": "Valid",
+      "single_point_registration": true
+    }
+  ],
+  "make_in_india": [
+    {
+      "pan": "AABCU9603R",
+      "local_content_percent": 78.5,
+      "class": "Class-I Local Supplier",
+      "self_declaration": true,
+      "oem_authorized": true,
+      "oem_name": "In-house OEM"
+    },
+    {
+      "pan": "AAACP1234A",
+      "local_content_percent": 62.0,
+      "class": "Class-I Local Supplier",
+      "self_declaration": true,
+      "oem_authorized": true,
+      "oem_name": "Precision OEM India"
+    },
+    {
+      "pan": "AADCS1234B",
+      "local_content_percent": 55.0,
+      "class": "Class-II Local Supplier",
+      "self_declaration": true,
+      "oem_authorized": false,
+      "oem_name": ""
+    },
+    {
+      "pan": "AABCW7788D",
+      "local_content_percent": 91.0,
+      "class": "Class-I Local Supplier",
+      "self_declaration": true,
+      "oem_authorized": true,
+      "oem_name": "Eastern Fab OEM"
+    },
+    {
+      "pan": "AAGCS5521K",
+      "local_content_percent": 28.0,
+      "class": "Non-Local Supplier",
+      "self_declaration": false,
+      "oem_authorized": false,
+      "oem_name": ""
+    }
+  ]
+}

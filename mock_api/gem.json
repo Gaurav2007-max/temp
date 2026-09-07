@@ -1,0 +1,5 @@
+{
+  "records": [
+    {"gem_bid_id": "GEM/2026/B/1234567", "title": "Network Equipment Supply", "organization": "Department of Digital Infrastructure", "category": "Network Equipment", "description": "Bidder must have valid GST registration, minimum annual turnover of INR 5 crore, minimum 50% local content, BIS license and OEM authorization.", "estimated_value": 25000000, "requirements": ["GST Certificate", "PAN Card", "OEM Authorization", "BIS License", "Local Content Declaration"]}
+  ]
+}

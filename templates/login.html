@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+
+{% block title %}Sign In - GeM Compliance Verification{% endblock %}
+
+{% block content %}
+<div class="max-w-md mx-auto my-8">
+  <div class="bg-white p-8 rounded-xl shadow-sm border border-slate-200">
+    <div class="text-center mb-6">
+      <div class="inline-flex items-center justify-center w-12 h-12 rounded-lg bg-blue-600 text-white font-bold text-xl mb-3 shadow-sm">
+        GeM
+      </div>
+      <h1 class="text-xl font-bold text-slate-900 tracking-tight">Sign In to Platform</h1>
+      <p class="text-xs text-slate-500 mt-1">Access Admin, Officer, or Bidder Workspaces</p>
+    </div>
+
+    <form id="loginForm" action="/login" method="POST" class="space-y-4">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <div>
+        <label for="username" class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">Email / Username</label>
+        <input type="text" id="username" name="username" required
+               class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+               placeholder="name@domain.gov.in or email">
+      </div>
+
+      <div>
+        <div class="flex items-center justify-between mb-1">
+          <label for="password" class="block text-xs font-semibold text-slate-700 uppercase tracking-wider">Password</label>
+          <button type="button" onclick="togglePasswordVisibility()" class="text-xs text-blue-600 hover:text-blue-700 font-medium">
+            <span id="pwdToggleLabel">Show</span>
+          </button>
+        </div>
+        <input type="password" id="password" name="password" required
+               class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+               placeholder="••••••••">
+      </div>
+
+      <button type="submit" id="signInBtn" class="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm rounded-lg shadow transition flex items-center justify-center gap-2">
+        <span id="signInBtnText">Sign In</span>
+      </button>
+    </form>
+
+    <div class="mt-6 pt-6 border-t border-slate-200">
+      <div class="flex items-center justify-between mb-2">
+        <div class="text-xs font-semibold text-slate-600 uppercase tracking-wider">1-Click Direct Login</div>
+        <span class="text-[10px] text-emerald-600 font-medium bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">Instant Access</span>
+      </div>
+      <div class="grid grid-cols-3 gap-2 mb-3">
+        <button type="button" id="btnAdminDirect" onclick="quickLogin('{{ demo_admin_user }}', '{{ demo_admin_pass }}', 'Admin')"
+                class="px-2 py-2.5 bg-blue-50 hover:bg-blue-100 active:bg-blue-200 text-blue-800 text-xs font-bold rounded-lg border border-blue-200 text-center transition shadow-xs cursor-pointer">
+          &rarr; Admin
+          <span class="block text-[10px] text-blue-600 font-normal truncate mt-0.5">{{ demo_admin_user }}</span>
+        </button>
+        <button type="button" id="btnOfficerDirect" onclick="quickLogin('officer@gem.gov.in', 'officer123', 'Officer')"
+                class="px-2 py-2.5 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-800 text-xs font-bold rounded-lg border border-slate-300 text-center transition shadow-xs cursor-pointer">
+          &rarr; Officer
+          <span class="block text-[10px] text-slate-500 font-normal truncate mt-0.5">officer@gem...</span>
+        </button>
+        <button type="button" id="btnBidderDirect" onclick="quickLogin('compliance@bharattech.example', 'bidder123', 'Bidder')"
+                class="px-2 py-2.5 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-800 text-xs font-bold rounded-lg border border-slate-300 text-center transition shadow-xs cursor-pointer">
+          &rarr; Bidder
+          <span class="block text-[10px] text-slate-500 font-normal truncate mt-0.5">compliance@...</span>
+        </button>
+      </div>
+
+    </div>
+
+    <div class="mt-6 text-center text-xs text-slate-500">
+      New vendor or supplier?
+      <a href="/register" class="text-blue-600 hover:underline font-semibold ml-1">Register your enterprise</a>
+    </div>
+  </div>
+</div>
+
+<script>
+  function fillCreds(u, p) {
+    document.getElementById('username').value = u;
+    document.getElementById('password').value = p;
+  }
+
+  function quickLogin(u, p, roleName) {
+    fillCreds(u, p);
+    const btn = document.getElementById('signInBtn');
+    const label = document.getElementById('signInBtnText');
+    if (label) label.textContent = 'Signing in as ' + roleName + '...';
+    if (btn) btn.disabled = true;
+    document.getElementById('loginForm').submit();
+  }
+
+  document.getElementById('loginForm').addEventListener('submit', function() {
+    const btn = document.getElementById('signInBtn');
+    const label = document.getElementById('signInBtnText');
+    if (label && label.textContent === 'Sign In') {
+      label.textContent = 'Signing in...';
+    }
+    if (btn) btn.classList.add('opacity-75');
+  });
+
+  function togglePasswordVisibility() {
+    const pwdInput = document.getElementById('password');
+    const toggleLabel = document.getElementById('pwdToggleLabel');
+    if (pwdInput.type === 'password') {
+      pwdInput.type = 'text';
+      toggleLabel.textContent = 'Hide';
+    } else {
+      pwdInput.type = 'password';
+      toggleLabel.textContent = 'Show';
+    }
+  }
+</script>
+{% endblock %}

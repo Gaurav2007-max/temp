@@ -1,0 +1,48 @@
+{
+  "records": [
+    {
+      "cin": "U72900DL2018PTC331245",
+      "company_name": "BHARAT TECH SOLUTIONS PRIVATE LIMITED",
+      "company_status": "Active",
+      "incorporation_date": "2018-03-01",
+      "roc": "RoC-Delhi",
+      "authorized_capital": 10000000,
+      "paid_up_capital": 5000000,
+      "directors": ["Rajesh Kumar", "Anita Sharma"],
+      "registered_address": "A-12, Okhla Industrial Area Phase II, New Delhi 110020"
+    },
+    {
+      "cin": "AAE-4521",
+      "company_name": "PRECISION COMPONENTS INDIA LLP",
+      "company_status": "Active",
+      "incorporation_date": "2019-05-10",
+      "roc": "RoC-Pune",
+      "authorized_capital": 2000000,
+      "paid_up_capital": 2000000,
+      "directors": ["Meera Patil", "Suresh Deshmukh"],
+      "registered_address": "Plot 45, MIDC Industrial Estate, Pune 411019"
+    },
+    {
+      "cin": "U01403UP2020PTC128901",
+      "company_name": "UTTAR PRADESH AGRO MACHINES PRIVATE LIMITED",
+      "company_status": "Strike Off",
+      "incorporation_date": "2020-01-10",
+      "roc": "RoC-Kanpur",
+      "authorized_capital": 500000,
+      "paid_up_capital": 100000,
+      "directors": ["Vikram Singh"],
+      "registered_address": "Sector 62, Noida 201301"
+    },
+    {
+      "cin": "U72200KA2021PTC147882",
+      "company_name": "SOUTH INDIA DIGITAL SERVICES PRIVATE LIMITED",
+      "company_status": "Active",
+      "incorporation_date": "2021-04-12",
+      "roc": "RoC-Bangalore",
+      "authorized_capital": 3000000,
+      "paid_up_capital": 1500000,
+      "directors": ["Arjun Rao", "Priya Nair"],
+      "registered_address": "Electronic City Phase 1, Bengaluru 560100"
+    }
+  ]
+}

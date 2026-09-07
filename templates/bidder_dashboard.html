@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+
+{% block title %}Bidder Portal - GeM Compliance{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+  <!-- Bidder Profile Strip -->
+  <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <div>
+      <div class="flex items-center gap-3">
+        <h1 class="text-xl font-bold text-slate-900">{{ bidder.company_name }}</h1>
+        <span class="px-2 py-0.5 rounded text-xs font-mono font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+          Verified Profile
+        </span>
+      </div>
+      <p class="text-xs text-slate-500 mt-1">
+        GSTIN: <span class="font-mono text-slate-800 font-semibold">{{ bidder.gstin or '-' }}</span> &bull;
+        PAN: <span class="font-mono text-slate-800 font-semibold">{{ bidder.pan or '-' }}</span> &bull;
+        Udyam: <span class="font-mono text-slate-800 font-semibold">{{ bidder.udyam_reg_no or '-' }}</span>
+      </p>
+      <p class="text-xs text-slate-400 mt-0.5">
+        Reg. Address: {{ bidder.registered_address }}
+      </p>
+    </div>
+  </div>
+
+  <!-- PENDING CLARIFICATIONS BANNER -->
+  {% if clarifications %}
+    <div class="bg-amber-50 border border-amber-200 rounded-xl p-6 shadow-sm">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-sm font-bold text-amber-900 uppercase tracking-wider flex items-center gap-2">
+          <svg class="w-4 h-4 text-amber-600 animate-pulse" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
+          Clarification Requests Requiring Your Action ({{ clarifications | length }})
+        </h2>
+      </div>
+      <div class="space-y-4">
+        {% for c in clarifications %}
+          <div class="bg-white p-4 rounded-lg border border-amber-200 shadow-xs">
+            <div class="flex justify-between items-start">
+              <div>
+                <span class="font-mono font-bold text-blue-600 text-xs">{{ c.gem_bid_id }}</span> &bull;
+                <span class="font-semibold text-xs text-slate-900">{{ c.tender_title }}</span>
+                <span class="text-slate-400 text-xs ml-2 font-mono">(Ref: {{ c.requirement_code }})</span>
+              </div>
+              <span class="text-[11px] text-rose-600 font-semibold">Deadline: {{ c.deadline }}</span>
+            </div>
+            <div class="bg-slate-50 p-3 rounded text-xs text-slate-800 my-2 border border-slate-200">
+              <strong>Query:</strong> {{ c.query_text }}
+            </div>
+
+            {% if c.status == 'PENDING' %}
+              <!-- Response Form with Supplementary Uploads -->
+              <form action="/clarifications/respond/{{ c.id }}" method="POST" enctype="multipart/form-data" class="mt-3 space-y-3">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div>
+                  <label class="block text-[11px] font-semibold text-slate-700 mb-1">Official Written Response *</label>
+                  <textarea name="response_text" rows="2" required
+                            class="w-full px-3 py-1.5 text-xs border border-slate-300 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                            placeholder="Provide detailed explanation addressing the procurement officer's query..."></textarea>
+                </div>
+                <div>
+                  <label class="block text-[11px] font-semibold text-slate-700 mb-1">Supplementary Supporting Documents (Multiple PDFs)</label>
+                  <input type="file" name="documents" multiple accept=".pdf"
+                         class="w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                </div>
+                <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded shadow transition">
+                  Submit Clarification & Trigger Re-Verification Pass
+                </button>
+              </form>
+            {% else %}
+              <div class="text-xs text-emerald-700 bg-emerald-50 p-2 rounded border border-emerald-200 mt-2 font-semibold">
+                ✓ Responded: {{ c.response_text }}
+              </div>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+
+  <!-- ACTIVE PUBLISHED TENDERS OPEN FOR BIDDING -->
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+    <div class="px-6 py-4 border-b border-slate-200">
+      <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wider">Active GeM Tenders Open for Bid Submission</h2>
+      <p class="text-xs text-slate-500 mt-0.5">Submit compliant bids with multi-document upload and receive immediate decision-support verification</p>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-xs text-slate-600">
+        <thead class="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200">
+          <tr>
+            <th class="px-6 py-3">Bid Number</th>
+            <th class="px-6 py-3">Tender Title & Ministry</th>
+            <th class="px-6 py-3">Est. Value</th>
+            <th class="px-6 py-3">Min. Turnover</th>
+            <th class="px-6 py-3">Deadline</th>
+            <th class="px-6 py-3 text-right">Action</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-200">
+          {% for t in open_tenders %}
+            <tr class="hover:bg-slate-50 transition">
+              <td class="px-6 py-4 font-mono font-bold text-blue-600">{{ t.gem_bid_id }}</td>
+              <td class="px-6 py-4">
+                <div class="font-semibold text-slate-900">{{ t.title }}</div>
+                <div class="text-[11px] text-slate-400">{{ t.organization }}</div>
+              </td>
+              <td class="px-6 py-4 font-mono font-semibold text-slate-800">₹{{ "{:,.2f}".format(t.estimated_value or 0) }}</td>
+              <td class="px-6 py-4 font-mono text-slate-700">₹{{ "{:,.2f}".format(t.min_turnover or 0) }}</td>
+              <td class="px-6 py-4 font-mono text-[11px] text-slate-500">{{ t.bid_end_date[:16] if t.bid_end_date else '-' }}</td>
+              <td class="px-6 py-4 text-right">
+                <a href="/bids/submit/{{ t.id }}"
+                   class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold shadow-sm transition">
+                  Submit Bid &rarr;
+                </a>
+              </td>
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="6" class="px-6 py-8 text-center text-slate-400">No open tenders currently accepting bids.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- MY SUBMITTED BIDS & VERIFICATION RESULTS -->
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+    <div class="px-6 py-4 border-b border-slate-200">
+      <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wider">My Bid Submissions & Compliance Verifications</h2>
+      <p class="text-xs text-slate-500 mt-0.5">Your submitted tenders, compliance scores, and official verification reports</p>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-xs text-slate-600">
+        <thead class="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200">
+          <tr>
+            <th class="px-6 py-3">Bid Number</th>
+            <th class="px-6 py-3">Tender Title</th>
+            <th class="px-6 py-3">Compliance Score</th>
+            <th class="px-6 py-3">Eligibility Status</th>
+            <th class="px-6 py-3">Current-Bid Risk</th>
+            <th class="px-6 py-3">Officer Ruling</th>
+            <th class="px-6 py-3 text-right">Action</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-200">
+          {% for s in submissions %}
+            <tr class="hover:bg-slate-50 transition">
+              <td class="px-6 py-4 font-mono font-bold text-blue-600">{{ s.gem_bid_id }}</td>
+              <td class="px-6 py-4 font-semibold text-slate-900">{{ s.tender_title }}</td>
+              <td class="px-6 py-4">
+                <div class="flex items-center gap-1.5 font-bold text-slate-900">
+                  <span>{{ s.score }}</span>
+                  <span class="text-slate-400 text-[10px]">/ 100</span>
+                </div>
+              </td>
+              <td class="px-6 py-4">
+                {% if s.eligibility == 'ELIGIBLE' %}
+                  <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">ELIGIBLE</span>
+                {% elif s.eligibility == 'NOT_ELIGIBLE' %}
+                  <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">NOT ELIGIBLE</span>
+                {% else %}
+                  <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">NEEDS REVIEW</span>
+                {% endif %}
+              </td>
+              <td class="px-6 py-4">
+                <span class="px-2 py-0.5 rounded text-[11px] font-semibold
+                  {% if s.risk_level == 'LOW' %}bg-emerald-50 text-emerald-700 border border-emerald-200
+                  {% elif s.risk_level == 'MEDIUM' %}bg-amber-50 text-amber-700 border border-amber-200
+                  {% else %}bg-rose-50 text-rose-700 border border-rose-200{% endif %}">
+                  {{ s.risk_level }}
+                </span>
+              </td>
+              <td class="px-6 py-4">
+                {% if s.officer_decision %}
+                  <span class="px-2 py-0.5 rounded text-[11px] font-bold
+                    {% if s.officer_decision == 'QUALIFIED' %}bg-emerald-600 text-white
+                    {% else %}bg-rose-600 text-white{% endif %}">
+                    {{ s.officer_decision }}
+                  </span>
+                {% else %}
+                  <span class="text-slate-400 italic">Under Evaluation</span>
+                {% endif %}
+              </td>
+              <td class="px-6 py-4 text-right">
+                <a href="/reports/{{ s.tender_id }}/{{ bidder.id }}"
+                   class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded text-xs font-semibold border border-slate-300 transition">
+                  View Full Report &rarr;
+                </a>
+              </td>
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="7" class="px-6 py-8 text-center text-slate-400">You haven't submitted any bids yet.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

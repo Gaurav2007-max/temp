@@ -1,0 +1,394 @@
+import os
+import sqlite3
+from flask import g
+
+DATABASE_PATH = os.environ.get("SQLITE_PATH", os.path.join(os.path.dirname(__file__), "..", "gem_compliance.db"))
+
+SCHEMA_SQL = """
+PRAGMA foreign_keys = ON;
+
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    name TEXT NOT NULL,
+    email TEXT UNIQUE NOT NULL,
+    role TEXT NOT NULL CHECK(role IN ('admin', 'officer', 'bidder')),
+    phone TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS bidders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER UNIQUE,
+    company_name TEXT NOT NULL,
+    pan TEXT,
+    gstin TEXT,
+    udyam_reg_no TEXT,
+    registered_address TEXT,
+    contact_person TEXT,
+    phone TEXT,
+    email TEXT,
+    bidder_type TEXT,
+    msme_status TEXT,
+    startup_recognition_no TEXT,
+    nsic_registration_no TEXT,
+    local_supplier_category TEXT,
+    oem_status TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS tenders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    gem_bid_id TEXT UNIQUE NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT,
+    organization TEXT NOT NULL,
+    category TEXT,
+    status TEXT DEFAULT 'Published',
+    lifecycle_stage TEXT DEFAULT 'OPEN_FOR_BIDDING' CHECK(lifecycle_stage IN ('OPEN_FOR_BIDDING', 'CLARIFICATION', 'OFFICER_REVIEW', 'DECIDED')),
+    estimated_value REAL DEFAULT 0,
+    min_turnover REAL DEFAULT 0,
+    min_experience_years INTEGER DEFAULT 0,
+    min_projects_count INTEGER DEFAULT 0,
+    min_cumulative_project_value REAL DEFAULT 0,
+    min_local_content REAL DEFAULT 50,
+    bid_start_date TEXT,
+    bid_end_date TEXT,
+    tender_version TEXT DEFAULT 'v1',
+    pdf_filename TEXT,
+    pdf_storage_path TEXT,
+    created_by INTEGER,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (created_by) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS tender_versions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tender_id INTEGER NOT NULL,
+    version_tag TEXT NOT NULL,
+    corrigendum_reason TEXT,
+    changes_summary TEXT,
+    officer_id INTEGER,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (tender_id) REFERENCES tenders(id) ON DELETE CASCADE,
+    FOREIGN KEY (officer_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS requirements (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tender_id INTEGER NOT NULL,
+    tender_version_id INTEGER,
+    code TEXT NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT,
+    requirement_type TEXT NOT NULL CHECK(requirement_type IN ('STATUTORY', 'FINANCIAL', 'TECHNICAL', 'DOCUMENTARY')),
+    is_mandatory INTEGER DEFAULT 1,
+    threshold_value REAL,
+    threshold_unit TEXT,
+    expected_doc_types TEXT,
+    structured_criteria TEXT,
+    source_clause TEXT,
+    source_page INTEGER,
+    extraction_confidence REAL DEFAULT 0,
+    extraction_source TEXT DEFAULT 'TEMPLATE',
+    applicability_conditions TEXT,
+    exemption_conditions TEXT,
+    review_status TEXT DEFAULT 'PENDING',
+    original_ai_output TEXT,
+    reviewed_by INTEGER,
+    reviewed_at TEXT,
+    review_version INTEGER DEFAULT 1,
+    scoring_weight REAL DEFAULT 10,
+    scoring_policy TEXT,
+    requirement_fingerprint TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (tender_id) REFERENCES tenders(id) ON DELETE CASCADE,
+    FOREIGN KEY (tender_version_id) REFERENCES tender_versions(id)
+);
+
+CREATE TABLE IF NOT EXISTS tender_assignments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tender_id INTEGER NOT NULL,
+    officer_id INTEGER NOT NULL,
+    assigned_by INTEGER,
+    assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (tender_id) REFERENCES tenders(id) ON DELETE CASCADE,
+    FOREIGN KEY (officer_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (assigned_by) REFERENCES users(id),
+    UNIQUE(tender_id, officer_id)
+);
+
+CREATE TABLE IF NOT EXISTS documents (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    bidder_id INTEGER NOT NULL,
+    tender_id INTEGER NOT NULL,
+    requirement_id INTEGER,
+    version INTEGER DEFAULT 1,
+    is_current INTEGER DEFAULT 1,
+    replaced_document_id INTEGER,
+    original_filename TEXT NOT NULL,
+    storage_filename TEXT NOT NULL,
+    storage_path TEXT NOT NULL,
+    file_size INTEGER DEFAULT 0,
+    mime_type TEXT,
+    doc_type TEXT NOT NULL,
+    classification_status TEXT DEFAULT 'VALID' CHECK(classification_status IN ('VALID', 'WRONG_DOCUMENT_TYPE', 'NEEDS_REVIEW', 'UNKNOWN')),
+    is_supplementary INTEGER DEFAULT 0,
+    clarification_id INTEGER,
+    extracted_text TEXT,
+    extracted_fields TEXT,
+    ocr_status TEXT DEFAULT 'VALID' CHECK(ocr_status IN ('VALID', 'WARNING', 'NEEDS_REVIEW', 'INVALID', 'SUCCESS', 'FAILED', 'NOT_REQUIRED')),
+    ocr_confidence REAL DEFAULT 1.0,
+    ocr_quality TEXT DEFAULT 'HIGH',
+    page_count INTEGER DEFAULT 1,
+    extraction_method TEXT DEFAULT 'TEXT',
+    sha256_hash TEXT,
+    duplicate_status TEXT DEFAULT 'UNIQUE',
+    duplicate_of_id INTEGER,
+    validity_status TEXT DEFAULT 'UNKNOWN',
+    valid_until TEXT,
+    tamper_indicators TEXT,
+    file_metadata TEXT,
+    digital_signature_status TEXT DEFAULT 'NOT_CHECKED',
+    qr_detected INTEGER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (bidder_id) REFERENCES bidders(id) ON DELETE CASCADE,
+    FOREIGN KEY (tender_id) REFERENCES tenders(id) ON DELETE CASCADE,
+    FOREIGN KEY (requirement_id) REFERENCES requirements(id) ON DELETE SET NULL,
+    FOREIGN KEY (replaced_document_id) REFERENCES documents(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS verifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tender_id INTEGER NOT NULL,
+    bidder_id INTEGER NOT NULL,
+    version_num INTEGER DEFAULT 1,
+    score REAL DEFAULT 0,
+    eligibility TEXT DEFAULT 'NEEDS_REVIEW' CHECK(eligibility IN ('ELIGIBLE', 'NOT_ELIGIBLE', 'NEEDS_REVIEW')),
+    risk_level TEXT DEFAULT 'LOW' CHECK(risk_level IN ('LOW', 'MEDIUM', 'HIGH')),
+    risk_factors TEXT,
+    statutory_summary TEXT,
+    conflicts_detected TEXT,
+    recommendation TEXT,
+    officer_decision TEXT CHECK(officer_decision IN ('QUALIFIED', 'DISQUALIFIED', NULL)),
+    officer_remarks TEXT,
+    decided_by INTEGER,
+    decided_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (tender_id) REFERENCES tenders(id) ON DELETE CASCADE,
+    FOREIGN KEY (bidder_id) REFERENCES bidders(id) ON DELETE CASCADE,
+    FOREIGN KEY (decided_by) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS verification_requirements (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    verification_id INTEGER NOT NULL,
+    requirement_id INTEGER NOT NULL,
+    status TEXT NOT NULL CHECK(status IN ('COMPLIANT', 'NON_COMPLIANT', 'NEEDS_REVIEW', 'WARNING', 'UNAVAILABLE', 'PASS', 'FAIL', 'NOT_APPLICABLE', 'EXEMPTED')),
+    is_mandatory INTEGER DEFAULT 1,
+    score_awarded REAL DEFAULT 0,
+    max_score REAL DEFAULT 10,
+    evidence TEXT,
+    issues TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (verification_id) REFERENCES verifications(id) ON DELETE CASCADE,
+    FOREIGN KEY (requirement_id) REFERENCES requirements(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS clarifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tender_id INTEGER NOT NULL,
+    bidder_id INTEGER NOT NULL,
+    verification_id INTEGER NOT NULL,
+    officer_id INTEGER NOT NULL,
+    requirement_code TEXT,
+    query_text TEXT NOT NULL,
+    deadline TEXT,
+    status TEXT DEFAULT 'PENDING' CHECK(status IN ('PENDING', 'RESPONDED', 'RESOLVED', 'EXPIRED')),
+    response_text TEXT,
+    responded_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (tender_id) REFERENCES tenders(id) ON DELETE CASCADE,
+    FOREIGN KEY (bidder_id) REFERENCES bidders(id) ON DELETE CASCADE,
+    FOREIGN KEY (verification_id) REFERENCES verifications(id) ON DELETE CASCADE,
+    FOREIGN KEY (officer_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS audit_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    actor_id INTEGER,
+    actor_name TEXT,
+    actor_role TEXT,
+    action TEXT NOT NULL,
+    resource_type TEXT NOT NULL,
+    resource_id TEXT,
+    details TEXT,
+    ip_address TEXT,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (actor_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS notifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    recipient_user_id INTEGER NOT NULL,
+    event_type TEXT NOT NULL,
+    title TEXT NOT NULL,
+    message TEXT NOT NULL,
+    resource_type TEXT,
+    resource_id TEXT,
+    channel TEXT DEFAULT 'IN_APP',
+    status TEXT DEFAULT 'UNREAD' CHECK(status IN ('UNREAD', 'READ')),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    read_at TEXT,
+    FOREIGN KEY (recipient_user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+CREATE INDEX IF NOT EXISTS idx_tenders_gem_id ON tenders(gem_bid_id);
+CREATE INDEX IF NOT EXISTS idx_documents_bidder_tender ON documents(bidder_id, tender_id);
+CREATE INDEX IF NOT EXISTS idx_verifications_bidder_tender ON verifications(bidder_id, tender_id);
+CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_logs(timestamp);
+CREATE INDEX IF NOT EXISTS idx_notifications_recipient ON notifications(recipient_user_id, status, created_at);
+"""
+
+def get_db_connection(db_path=None):
+    path = db_path or os.environ.get("SQLITE_PATH", DATABASE_PATH)
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    conn = sqlite3.connect(path, timeout=30.0)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON;")
+    return conn
+
+def get_db():
+    if "db" not in g:
+        g.db = get_db_connection()
+    return g.db
+
+def close_db(e=None):
+    try:
+        db = g.pop("db", None)
+        if db is not None:
+            db.close()
+    except (RuntimeError, LookupError):
+        pass
+
+def init_db(db_path=None):
+    conn = get_db_connection(db_path)
+    try:
+        # First ensure schema tables exist
+        conn.executescript(SCHEMA_SQL)
+        # Apply non-destructive column migrations for documents and requirements
+        cols = [r[1] for r in conn.execute("PRAGMA table_info(documents)").fetchall()]
+        if "extraction_method" not in cols:
+            conn.execute("ALTER TABLE documents ADD COLUMN extraction_method TEXT DEFAULT 'TEXT'")
+        if "requirement_id" not in cols:
+            conn.execute("ALTER TABLE documents ADD COLUMN requirement_id INTEGER")
+        if "version" not in cols:
+            conn.execute("ALTER TABLE documents ADD COLUMN version INTEGER DEFAULT 1")
+        if "is_current" not in cols:
+            conn.execute("ALTER TABLE documents ADD COLUMN is_current INTEGER DEFAULT 1")
+        if "replaced_document_id" not in cols:
+            conn.execute("ALTER TABLE documents ADD COLUMN replaced_document_id INTEGER")
+        if "classification_status" not in cols:
+            conn.execute("ALTER TABLE documents ADD COLUMN classification_status TEXT DEFAULT 'VALID'")
+        document_migrations = {
+            "sha256_hash": "TEXT",
+            "duplicate_status": "TEXT DEFAULT 'UNIQUE'",
+            "duplicate_of_id": "INTEGER",
+            "validity_status": "TEXT DEFAULT 'UNKNOWN'",
+            "valid_until": "TEXT",
+            "tamper_indicators": "TEXT",
+            "file_metadata": "TEXT",
+            "digital_signature_status": "TEXT DEFAULT 'NOT_CHECKED'",
+            "qr_detected": "INTEGER DEFAULT 0",
+        }
+        for column, definition in document_migrations.items():
+            if column not in cols:
+                conn.execute(f"ALTER TABLE documents ADD COLUMN {column} {definition}")
+        req_cols = [r[1] for r in conn.execute("PRAGMA table_info(requirements)").fetchall()]
+        requirement_migrations = {
+            "structured_criteria": "TEXT",
+            "source_clause": "TEXT",
+            "source_page": "INTEGER",
+            "extraction_confidence": "REAL DEFAULT 0",
+            "extraction_source": "TEXT DEFAULT 'TEMPLATE'",
+            "applicability_conditions": "TEXT",
+            "exemption_conditions": "TEXT",
+            "review_status": "TEXT DEFAULT 'PENDING'",
+            "original_ai_output": "TEXT",
+            "reviewed_by": "INTEGER",
+            "reviewed_at": "TEXT",
+            "review_version": "INTEGER DEFAULT 1",
+            "scoring_weight": "REAL DEFAULT 10",
+            "scoring_policy": "TEXT",
+        }
+        for column, definition in requirement_migrations.items():
+            if column not in req_cols:
+                conn.execute(f"ALTER TABLE requirements ADD COLUMN {column} {definition}")
+        if "requirement_fingerprint" not in req_cols:
+            conn.execute("ALTER TABLE requirements ADD COLUMN requirement_fingerprint TEXT")
+        bidder_cols = [r[1] for r in conn.execute("PRAGMA table_info(bidders)").fetchall()]
+        bidder_migrations = {
+            "bidder_type": "TEXT",
+            "msme_status": "TEXT",
+            "startup_recognition_no": "TEXT",
+            "nsic_registration_no": "TEXT",
+            "local_supplier_category": "TEXT",
+            "oem_status": "TEXT",
+        }
+        for column, definition in bidder_migrations.items():
+            if column not in bidder_cols:
+                conn.execute(f"ALTER TABLE bidders ADD COLUMN {column} {definition}")
+        verification_req_sql = conn.execute(
+            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'verification_requirements'"
+        ).fetchone()[0] or ""
+        if "EXEMPTED" not in verification_req_sql:
+            conn.execute("PRAGMA foreign_keys = OFF")
+            conn.execute("ALTER TABLE verification_requirements RENAME TO verification_requirements_legacy")
+            conn.execute("""
+                CREATE TABLE verification_requirements (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    verification_id INTEGER NOT NULL,
+                    requirement_id INTEGER NOT NULL,
+                    status TEXT NOT NULL CHECK(status IN ('COMPLIANT', 'NON_COMPLIANT', 'NEEDS_REVIEW', 'WARNING', 'UNAVAILABLE', 'PASS', 'FAIL', 'NOT_APPLICABLE', 'EXEMPTED')),
+                    is_mandatory INTEGER DEFAULT 1,
+                    score_awarded REAL DEFAULT 0,
+                    max_score REAL DEFAULT 10,
+                    evidence TEXT,
+                    issues TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (verification_id) REFERENCES verifications(id) ON DELETE CASCADE,
+                    FOREIGN KEY (requirement_id) REFERENCES requirements(id) ON DELETE CASCADE
+                )
+            """)
+            conn.execute("""
+                INSERT INTO verification_requirements
+                (id, verification_id, requirement_id, status, is_mandatory, score_awarded, max_score, evidence, issues, created_at)
+                SELECT id, verification_id, requirement_id, status, is_mandatory, score_awarded, max_score, evidence, issues, created_at
+                FROM verification_requirements_legacy
+            """)
+            conn.execute("DROP TABLE verification_requirements_legacy")
+            conn.execute("PRAGMA foreign_keys = ON")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_documents_req ON documents(bidder_id, tender_id, requirement_id, is_current);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_documents_hash ON documents(bidder_id, tender_id, sha256_hash);")
+        conn.commit()
+    finally:
+        conn.close()
+
+def query_db(query, args=(), one=False):
+    cur = get_db().execute(query, args)
+    rv = cur.fetchall()
+    cur.close()
+    return (rv[0] if rv else None) if one else rv
+
+def execute_db(query, args=(), commit=True):
+    db = get_db()
+    cur = db.execute(query, args)
+    if commit:
+        db.commit()
+    last_id = cur.lastrowid
+    cur.close()
+    return last_id

@@ -1,0 +1,21 @@
+BIDDER COMPLIANCE DOCUMENT — SAMPLE
+====================================
+
+Legal Name: Bharat Tech Solutions Private Limited
+Trade Name: BharatTech
+PAN: AABCU9603R
+GSTIN: 07AABCU9603R1ZM
+Udyam Registration: UDYAM-DL-03-0012345
+CIN: U72900DL2018PTC331245
+
+Registered Address: A-12, Okhla Industrial Area Phase II, New Delhi 110020
+Email: compliance@bharattech.example
+Phone: 9876543210
+
+Make in India Local Content: 78.5%
+Class of Supplier: Class-I Local Supplier
+OEM Authorization: Yes — In-house OEM
+
+Declaration:
+We hereby declare that the information furnished above is true and correct
+to the best of our knowledge for the purpose of GeM bid participation.

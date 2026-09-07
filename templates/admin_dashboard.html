@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+
+{% block title %}Administrator Dashboard - GeM Compliance{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+  <!-- Top Bar -->
+  <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center pb-4 border-b border-slate-200 gap-4">
+    <div>
+      <h1 class="text-2xl font-bold text-slate-900 tracking-tight">System Administration</h1>
+      <p class="text-xs text-slate-500 mt-1">Platform-wide overview, officer management, and immutable audit trail</p>
+    </div>
+    <div class="flex items-center space-x-2">
+      <a href="/admin/officers" class="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm transition">
+        + Add Officer
+      </a>
+      <a href="/admin/assignments" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold rounded-lg shadow-sm transition">
+        Assign Tenders
+      </a>
+      <a href="/api/status" class="px-3 py-2 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-lg border border-slate-300 shadow-sm transition">
+        Statutory Status
+      </a>
+    </div>
+  </div>
+
+  <!-- Metric Cards -->
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+    <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+      <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Tenders</div>
+      <div class="text-2xl font-bold text-slate-900 mt-2">{{ stats.total_tenders }}</div>
+      <div class="text-xs text-slate-400 mt-1">Active GeM tenders</div>
+    </div>
+    <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+      <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Registered Officers</div>
+      <div class="text-2xl font-bold text-blue-600 mt-2">{{ stats.total_officers }}</div>
+      <div class="text-xs text-slate-400 mt-1">Procurement evaluators</div>
+    </div>
+    <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+      <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Verified Bidders</div>
+      <div class="text-2xl font-bold text-emerald-600 mt-2">{{ stats.total_bidders }}</div>
+      <div class="text-xs text-slate-400 mt-1">Suppliers & vendors</div>
+    </div>
+    <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+      <div class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Audit Events Logged</div>
+      <div class="text-2xl font-bold text-slate-900 mt-2">{{ stats.total_audits }}</div>
+      <div class="text-xs text-slate-400 mt-1">Immutable trail entries</div>
+    </div>
+  </div>
+
+  <!-- Tenders List Section -->
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+    <div class="px-6 py-4 border-b border-slate-200 flex justify-between items-center">
+      <div>
+        <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wider">Published Tenders & Assignments</h2>
+        <p class="text-xs text-slate-500 mt-0.5">Tenders under evaluation with assigned procurement officers</p>
+      </div>
+      <a href="/officer" class="text-xs text-blue-600 hover:underline font-semibold">Switch to Officer View &rarr;</a>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-xs text-slate-600">
+        <thead class="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200">
+          <tr>
+            <th class="px-6 py-3">GeM Bid ID</th>
+            <th class="px-6 py-3">Title & Organization</th>
+            <th class="px-6 py-3">Version</th>
+            <th class="px-6 py-3">Stage</th>
+            <th class="px-6 py-3">Assigned Officers</th>
+            <th class="px-6 py-3 text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-200">
+          {% for t in tenders %}
+            <tr class="hover:bg-slate-50 transition">
+              <td class="px-6 py-4 font-mono font-bold text-blue-600">{{ t.gem_bid_id }}</td>
+              <td class="px-6 py-4">
+                <div class="font-semibold text-slate-900">{{ t.title }}</div>
+                <div class="text-[11px] text-slate-400">{{ t.organization }}</div>
+              </td>
+              <td class="px-6 py-4">
+                <span class="px-2 py-0.5 rounded text-[11px] font-mono bg-slate-100 text-slate-700 font-semibold">{{ t.tender_version }}</span>
+              </td>
+              <td class="px-6 py-4">
+                <span class="px-2 py-1 rounded text-[11px] font-semibold
+                  {% if t.lifecycle_stage == 'OPEN_FOR_BIDDING' %}bg-emerald-50 text-emerald-700 border border-emerald-200
+                  {% elif t.lifecycle_stage == 'CLARIFICATION' %}bg-amber-50 text-amber-700 border border-amber-200
+                  {% elif t.lifecycle_stage == 'OFFICER_REVIEW' %}bg-blue-50 text-blue-700 border border-blue-200
+                  {% else %}bg-slate-100 text-slate-700{% endif %}">
+                  {{ t.lifecycle_stage }}
+                </span>
+              </td>
+              <td class="px-6 py-4">
+                {{ t.assigned_officers or '<span class="text-slate-400 italic">Unassigned</span>'|safe }}
+              </td>
+              <td class="px-6 py-4 text-right space-x-2">
+                <a href="/tenders/{{ t.id }}" class="text-blue-600 hover:text-blue-800 font-semibold">View Detail</a>
+                {% if t.pdf_storage_path %}
+                  <a href="/tenders/pdf/{{ t.id }}" class="text-slate-500 hover:text-slate-800" target="_blank">PDF</a>
+                {% endif %}
+              </td>
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="6" class="px-6 py-8 text-center text-slate-400">No tenders created yet.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Immutable Audit Log Trail Section -->
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+    <div class="px-6 py-4 border-b border-slate-200">
+      <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wider">Immutable Platform Audit Trail</h2>
+      <p class="text-xs text-slate-500 mt-0.5">Chronological system log of all administrative, officer, and bidder actions</p>
+    </div>
+    <div class="overflow-x-auto max-h-96">
+      <table class="w-full text-left text-xs text-slate-600">
+        <thead class="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200 sticky top-0">
+          <tr>
+            <th class="px-6 py-3">Timestamp (UTC)</th>
+            <th class="px-6 py-3">Actor</th>
+            <th class="px-6 py-3">Action</th>
+            <th class="px-6 py-3">Resource</th>
+            <th class="px-6 py-3">Details</th>
+            <th class="px-6 py-3">IP Address</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-200">
+          {% for a in audit_logs %}
+            <tr class="hover:bg-slate-50 transition">
+              <td class="px-6 py-3 font-mono text-[11px] text-slate-500">{{ a.timestamp }}</td>
+              <td class="px-6 py-3">
+                <span class="font-semibold text-slate-800">{{ a.actor_name or 'System' }}</span>
+                <span class="text-[10px] text-slate-400 font-mono">({{ a.actor_role or 'system' }})</span>
+              </td>
+              <td class="px-6 py-3 font-semibold text-slate-900">{{ a.action }}</td>
+              <td class="px-6 py-3 font-mono text-[11px] text-blue-600">{{ a.resource_type }} #{{ a.resource_id or '-' }}</td>
+              <td class="px-6 py-3 text-slate-600 max-w-xs truncate">{{ a.details or '-' }}</td>
+              <td class="px-6 py-3 font-mono text-[11px] text-slate-400">{{ a.ip_address or '-' }}</td>
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="6" class="px-6 py-8 text-center text-slate-400">No audit records logged yet.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

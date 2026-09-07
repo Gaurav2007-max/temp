@@ -1,0 +1,44 @@
+{
+  "records": [
+    {
+      "pan": "AABCU9603R",
+      "establishment_id": "DLCPM1234567000",
+      "name": "Bharat Tech Solutions Private Limited",
+      "status": "Active",
+      "employees_covered": 86,
+      "last_contribution_month": "2026-07",
+      "compliance_status": "Compliant",
+      "pending_dues": 0
+    },
+    {
+      "pan": "AAACP1234A",
+      "establishment_id": "MHPNB9876543000",
+      "name": "Precision Components India LLP",
+      "status": "Active",
+      "employees_covered": 42,
+      "last_contribution_month": "2026-05",
+      "compliance_status": "Partially Compliant",
+      "pending_dues": 38000
+    },
+    {
+      "pan": "AADCS1234B",
+      "establishment_id": "KABNG5544332000",
+      "name": "South India Digital Services",
+      "status": "Active",
+      "employees_covered": 18,
+      "last_contribution_month": "2026-07",
+      "compliance_status": "Compliant",
+      "pending_dues": 0
+    },
+    {
+      "pan": "AABCW7788D",
+      "establishment_id": "WBHOW1122334000",
+      "name": "Eastern Fabricators Works",
+      "status": "Active",
+      "employees_covered": 55,
+      "last_contribution_month": "2026-07",
+      "compliance_status": "Compliant",
+      "pending_dues": 0
+    }
+  ]
+}

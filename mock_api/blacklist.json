@@ -1,0 +1,54 @@
+{
+  "records": [
+    {
+      "entity_name": "Uttar Pradesh Agro Machines",
+      "pan": "AAGCS5521K",
+      "gstin": "09AAGCS5521K1ZL",
+      "blacklist_status": true,
+      "debarred": true,
+      "authority": "Central Vigilance Commission / GeM",
+      "reason": "Submission of forged experience certificates in prior GeM bids",
+      "order_date": "2025-11-18",
+      "valid_till": "2028-11-17",
+      "order_ref": "GEM/DEB/2025/0412"
+    },
+    {
+      "entity_name": "Fake Supplies Consortium",
+      "pan": "AAAAA0000A",
+      "gstin": "07AAAAA0000A1Z0",
+      "blacklist_status": true,
+      "debarred": true,
+      "authority": "Department of Expenditure",
+      "reason": "Cartelization and bid-rigging",
+      "order_date": "2024-06-01",
+      "valid_till": "2027-05-31",
+      "order_ref": "DOE/BL/2024/88"
+    }
+  ],
+  "clear": [
+    {
+      "pan": "AABCU9603R",
+      "gstin": "07AABCU9603R1ZM",
+      "blacklist_status": false,
+      "debarred": false
+    },
+    {
+      "pan": "AAACP1234A",
+      "gstin": "27AAACP1234A1Z5",
+      "blacklist_status": false,
+      "debarred": false
+    },
+    {
+      "pan": "AADCS1234B",
+      "gstin": "29AADCS1234B1Z8",
+      "blacklist_status": false,
+      "debarred": false
+    },
+    {
+      "pan": "AABCW7788D",
+      "gstin": "19AABCW7788D1Z2",
+      "blacklist_status": false,
+      "debarred": false
+    }
+  ]
+}
