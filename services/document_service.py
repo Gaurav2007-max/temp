@@ -8,9 +8,31 @@ import pypdf
 from werkzeug.utils import secure_filename
 from database.db import get_db, execute_db, query_db
 from services.pdf_service import extract_pdf_content
-from services.llm_service import extract_document_fields_llm
+from services.llm_service import extract_document_fields_consensus
+from services.notification_service import notify_user
 
 UPLOAD_DIR = os.environ.get("UPLOAD_DIR", os.path.join(os.path.dirname(__file__), "..", "uploads", "documents"))
+
+def _notify_extraction_conflict(tender_id, document_id, filename, conflicts):
+    if not conflicts:
+        return
+    fields = ", ".join(item.get("field", "unknown") for item in conflicts)
+    officers = query_db(
+        """
+        SELECT officer_id FROM tender_assignments
+        WHERE tender_id = ?
+        """,
+        (tender_id,)
+    )
+    for officer in officers:
+        notify_user(
+            officer["officer_id"],
+            "DOCUMENT_EXTRACTION_CONFLICT",
+            "Document extraction needs review",
+            f"Gemini and deterministic extraction disagree for {filename} on: {fields}.",
+            "documents",
+            document_id,
+        )
 
 DOC_TYPE_REQUIREMENT_MAP = {
     "REQ_GST": ["GST_CERTIFICATE", "GST_RETURN"],
@@ -370,7 +392,10 @@ def save_requirement_document(bidder_id, tender_id, requirement_id, file_obj, de
         classification_status = "VALID"
 
     # Extract structured fields using LLM / deterministic fallback
-    fields = extract_document_fields_llm(inferred_type, text)
+    fields = extract_document_fields_consensus(inferred_type, text)
+    if fields.get("_extraction_conflicts"):
+        classification_status = "NEEDS_REVIEW"
+        fields["_classification_warning"] = "Gemini and deterministic extraction disagree on one or more fields. Officer review required."
     if pages:
         fields["_page_count"] = len(pages)
     fields["_doc_type_confidence"] = type_conf
@@ -440,6 +465,9 @@ def save_requirement_document(bidder_id, tender_id, requirement_id, file_obj, de
         item["document_id"] = doc_id
 
     execute_db("UPDATE documents SET extracted_fields = ? WHERE id = ?", (json.dumps(fields), doc_id))
+    _notify_extraction_conflict(
+        tender_id, doc_id, orig_name, fields.get("_extraction_conflicts", [])
+    )
 
     return True, {
         "id": doc_id,
@@ -691,6 +719,10 @@ def save_and_process_uploaded_documents(bidder_id, tender_id, files_list, is_sup
         if not file_obj or not file_obj.filename:
             continue
 
+        is_valid, validation_error = validate_uploaded_document_file(file_obj)
+        if not is_valid:
+            raise ValueError(validation_error)
+
         orig_name = secure_filename(file_obj.filename) or f"doc_{uuid.uuid4().hex[:8]}.pdf"
         unique_prefix = f"bid_{bidder_id}_t{tender_id}_{uuid.uuid4().hex[:8]}"
         storage_name = f"{unique_prefix}_{orig_name}"
@@ -709,12 +741,17 @@ def save_and_process_uploaded_documents(bidder_id, tender_id, files_list, is_sup
 
         inferred_type, type_conf, type_stat = detect_document_type(orig_name, text)
         matched_req_id = type_to_req.get(inferred_type)
+        classification_status = "NEEDS_REVIEW" if type_stat == "NEEDS_REVIEW" or ocr_stat == "FAILED" else "VALID"
 
-        fields = extract_document_fields_llm(inferred_type, text)
+        fields = extract_document_fields_consensus(inferred_type, text)
+        if fields.get("_extraction_conflicts"):
+            classification_status = "NEEDS_REVIEW"
+            fields["_classification_warning"] = "Gemini and deterministic extraction disagree on one or more fields. Officer review required."
         if pages:
             fields["_page_count"] = len(pages)
         fields["_doc_type_confidence"] = type_conf
         fields["_doc_type_status"] = type_stat
+        fields["_classification_status"] = classification_status
 
         field_provenance = []
         for f_name, f_val in fields.items():
@@ -748,15 +785,15 @@ def save_and_process_uploaded_documents(bidder_id, tender_id, files_list, is_sup
             INSERT INTO documents (
                 bidder_id, tender_id, requirement_id, version, is_current,
                 original_filename, storage_filename, storage_path,
-                file_size, mime_type, doc_type, is_supplementary, clarification_id,
+                file_size, mime_type, doc_type, classification_status, is_supplementary, clarification_id,
                 extracted_text, extracted_fields, ocr_status, ocr_confidence, ocr_quality,
                 page_count, extraction_method
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 bidder_id, tender_id, matched_req_id, 1, 1,
                 orig_name, storage_name, storage_path,
-                file_size, file_obj.content_type or "application/pdf", inferred_type,
+                file_size, file_obj.content_type or "application/pdf", inferred_type, classification_status,
                 is_supplementary, clarification_id,
                 text, json.dumps(fields),
                 ocr_stat, ocr_conf, ocr_qual,
@@ -768,6 +805,9 @@ def save_and_process_uploaded_documents(bidder_id, tender_id, files_list, is_sup
             item["document_id"] = doc_id
 
         execute_db("UPDATE documents SET extracted_fields = ? WHERE id = ?", (json.dumps(fields), doc_id))
+        _notify_extraction_conflict(
+            tender_id, doc_id, orig_name, fields.get("_extraction_conflicts", [])
+        )
 
         saved_docs.append({
             "id": doc_id,

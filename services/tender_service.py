@@ -9,15 +9,15 @@ from services.statutory_service import fetch_gem_bid
 TENDER_PDF_DIR = os.environ.get("TENDER_PDF_DIR", os.path.join(os.path.dirname(__file__), "..", "uploads", "tenders"))
 
 DEFAULT_REQUIREMENT_TEMPLATES = [
-    {"code": "REQ_GST", "title": "Valid GSTIN Registration & Up-to-date Returns", "type": "STATUTORY", "mandatory": 1, "docs": "['GST_CERTIFICATE', 'GST_RETURN']"},
-    {"code": "REQ_PAN", "title": "Permanent Account Number & IT Compliance", "type": "STATUTORY", "mandatory": 1, "docs": "['PAN_CARD', 'ITR']"},
-    {"code": "REQ_TURNOVER", "title": "Minimum Average Annual Turnover", "type": "FINANCIAL", "mandatory": 1, "docs": "['ITR', 'BALANCE_SHEET']"},
-    {"code": "REQ_EXPERIENCE", "title": "Past Project Experience & Completion", "type": "TECHNICAL", "mandatory": 1, "docs": "['EXPERIENCE_CERTIFICATE', 'WORK_ORDER']"},
-    {"code": "REQ_OEM", "title": "OEM Manufacturer Authorization", "type": "TECHNICAL", "mandatory": 1, "docs": "['OEM_AUTHORIZATION']"},
-    {"code": "REQ_MII", "title": "Make in India (MII) Local Content Minimum 50%", "type": "STATUTORY", "mandatory": 1, "docs": "['LOCAL_CONTENT_DECLARATION']"},
-    {"code": "REQ_BIS", "title": "BIS Standards / CRS License Compliance", "type": "TECHNICAL", "mandatory": 0, "docs": "['BIS_CERTIFICATE']"},
-    {"code": "REQ_UDYAM", "title": "MSME / Udyam Registration (Preference Benefit)", "type": "STATUTORY", "mandatory": 0, "docs": "['UDYAM_CERTIFICATE']"},
-    {"code": "REQ_BLACKLIST", "title": "Non-Debarment & Non-Blacklisting Declaration", "type": "STATUTORY", "mandatory": 1, "docs": "['DEBARMENT_DECLARATION']"}
+    {"code": "REQ_GST", "title": "Valid GSTIN Registration & Up-to-date Returns", "type": "STATUTORY", "mandatory": 1, "docs": json.dumps(["GST_CERTIFICATE", "GST_RETURN"])},
+    {"code": "REQ_PAN", "title": "Permanent Account Number & IT Compliance", "type": "STATUTORY", "mandatory": 1, "docs": json.dumps(["PAN_CARD", "ITR"])},
+    {"code": "REQ_TURNOVER", "title": "Minimum Average Annual Turnover", "type": "FINANCIAL", "mandatory": 1, "docs": json.dumps(["ITR", "BALANCE_SHEET"])},
+    {"code": "REQ_EXPERIENCE", "title": "Past Project Experience & Completion", "type": "TECHNICAL", "mandatory": 1, "docs": json.dumps(["EXPERIENCE_CERTIFICATE", "WORK_ORDER"])},
+    {"code": "REQ_OEM", "title": "OEM Manufacturer Authorization", "type": "TECHNICAL", "mandatory": 1, "docs": json.dumps(["OEM_AUTHORIZATION"])},
+    {"code": "REQ_MII", "title": "Make in India (MII) Local Content Minimum 50%", "type": "STATUTORY", "mandatory": 1, "docs": json.dumps(["LOCAL_CONTENT_DECLARATION"])},
+    {"code": "REQ_BIS", "title": "BIS Standards / CRS License Compliance", "type": "TECHNICAL", "mandatory": 0, "docs": json.dumps(["BIS_CERTIFICATE"])},
+    {"code": "REQ_UDYAM", "title": "MSME / Udyam Registration (Preference Benefit)", "type": "STATUTORY", "mandatory": 0, "docs": json.dumps(["UDYAM_CERTIFICATE"])},
+    {"code": "REQ_BLACKLIST", "title": "Non-Debarment & Non-Blacklisting Declaration", "type": "STATUTORY", "mandatory": 1, "docs": json.dumps(["DEBARMENT_DECLARATION"])}
 ]
 
 def create_tender(gem_bid_id, title, organization, category, description="", estimated_value=0,

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Bidder Portal - GeM Compliance{% endblock %}
+{% block title %}Bidder Portal - B.I.D.S.E.T.U.{% endblock %}
 
 {% block content %}
 <div class="space-y-6">
@@ -86,7 +86,7 @@
     </div>
 
     <div class="overflow-x-auto">
-      <table class="w-full text-left text-xs text-slate-600">
+      <table class="w-full min-w-max text-left text-xs text-slate-600">
         <thead class="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200">
           <tr>
             <th class="px-6 py-3">Bid Number</th>
@@ -156,13 +156,13 @@
                   <span class="text-slate-400 text-[10px]">/ 100</span>
                 </div>
               </td>
-              <td class="px-6 py-4">
+              <td class="px-6 py-4 whitespace-nowrap">
                 {% if s.eligibility == 'ELIGIBLE' %}
-                  <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">ELIGIBLE</span>
+                  <span class="inline-flex items-center whitespace-nowrap px-2.5 py-1 rounded-full text-[11px] leading-none font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">ELIGIBLE</span>
                 {% elif s.eligibility == 'NOT_ELIGIBLE' %}
-                  <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">NOT ELIGIBLE</span>
+                  <span class="inline-flex min-w-[6.5rem] items-center justify-center whitespace-nowrap px-2.5 py-1 rounded-full text-[11px] leading-none font-bold bg-rose-50 text-rose-700 border border-rose-200">NOT&nbsp;ELIGIBLE</span>
                 {% else %}
-                  <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">NEEDS REVIEW</span>
+                  <span class="inline-flex items-center whitespace-nowrap px-2.5 py-1 rounded-full text-[11px] leading-none font-bold bg-amber-50 text-amber-700 border border-amber-200">NEEDS REVIEW</span>
                 {% endif %}
               </td>
               <td class="px-6 py-4">
@@ -184,9 +184,9 @@
                   <span class="text-slate-400 italic">Under Evaluation</span>
                 {% endif %}
               </td>
-              <td class="px-6 py-4 text-right">
+              <td class="px-6 py-4 text-right whitespace-nowrap">
                 <a href="/reports/{{ s.tender_id }}/{{ bidder.id }}"
-                   class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded text-xs font-semibold border border-slate-300 transition">
+                   class="inline-block px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded text-xs font-semibold border border-slate-300 transition whitespace-nowrap">
                   View Full Report &rarr;
                 </a>
               </td>

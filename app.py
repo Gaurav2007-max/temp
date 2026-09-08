@@ -1,6 +1,7 @@
 import os
 import secrets
 import json
+import logging
 from datetime import datetime
 from functools import wraps
 from flask import (
@@ -20,7 +21,8 @@ from services.seed_data import seed_database
 from services.statutory_service import (
     verify_gst, verify_pan, verify_udyam, verify_mca, verify_epfo,
     verify_esic, verify_startup, verify_nsic, verify_bis,
-    verify_blacklisting, verify_digilocker, fetch_gem_bid
+    verify_blacklisting, verify_digilocker, fetch_gem_bid,
+    verify_mii, ping_adapter
 )
 from services.document_service import (
     save_and_process_uploaded_documents,
@@ -49,7 +51,7 @@ from services.clarification_service import (
     get_clarifications_by_bidder
 )
 from services.audit_service import log_audit_event, get_recent_audit_logs
-from services.notification_service import get_user_notifications, mark_notification_read, notify_user
+from services.notification_service import get_user_notifications, mark_notification_read, notify_user, send_gmail_otp
 
 from flask.sessions import SecureCookieSessionInterface
 
@@ -68,6 +70,8 @@ class IFrameSecureSessionInterface(SecureCookieSessionInterface):
         return app.config["SESSION_COOKIE_PARTITIONED"]
 
 app = Flask(__name__)
+logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
+logger = logging.getLogger(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 app.session_interface = IFrameSecureSessionInterface()
 app.secret_key = os.environ.get("SECRET_KEY", "Hello@2026")
@@ -80,6 +84,7 @@ app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024 # 50 MB max payload
 
 # Token serializers for stateless resilience in iframes
 csrf_serializer = URLSafeTimedSerializer(app.secret_key, salt="gem-csrf-token")
+registration_otp_serializer = URLSafeTimedSerializer(app.secret_key, salt="gem-registration-otp")
 auth_serializer = URLSafeTimedSerializer(app.secret_key, salt="gem-auth-session")
 
 # Teardown database connection
@@ -147,10 +152,13 @@ def restore_session_from_token():
 @app.before_request
 def csrf_protect():
     """
-    Verifies CSRF token on modifying HTTP methods.
-    Supports session tokens and cryptographically signed tokens (for iframe resilience).
+    Verifies CSRF tokens for authenticated state-changing actions.
+    Public login and registration forms do not depend on a session cookie.
     """
-    if not app.config.get("WTF_CSRF_ENABLED", True) and request.path != "/login":
+    if request.path in ("/login", "/register"):
+        return
+
+    if not app.config.get("WTF_CSRF_ENABLED", True):
         return
 
     if request.method in ("POST", "PUT", "DELETE", "PATCH"):
@@ -210,6 +218,44 @@ def require_tender_access(tender_id):
     if not assigned:
         abort(403, description="You are not assigned to this tender.")
 
+
+def refresh_tender_decision_state(tender_id):
+    """Mark a tender decided only after every submitted bidder has a ruling."""
+    submitted = query_db(
+        "SELECT DISTINCT bidder_id FROM documents WHERE tender_id = ?",
+        (tender_id,)
+    )
+    if not submitted:
+        return
+
+    unresolved = query_db(
+        """
+        SELECT COUNT(*) AS count
+        FROM (
+            SELECT DISTINCT d.bidder_id
+            FROM documents d
+            WHERE d.tender_id = ?
+        ) submitted_bidders
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM verifications v
+            WHERE v.tender_id = ?
+              AND v.bidder_id = submitted_bidders.bidder_id
+              AND v.version_num = (
+                  SELECT MAX(latest.version_num)
+                  FROM verifications latest
+                  WHERE latest.tender_id = v.tender_id
+                    AND latest.bidder_id = v.bidder_id
+              )
+              AND v.officer_decision IS NOT NULL
+        )
+        """,
+        (tender_id, tender_id),
+        one=True
+    )
+    next_stage = "DECIDED" if unresolved["count"] == 0 else "OFFICER_REVIEW"
+    execute_db("UPDATE tenders SET lifecycle_stage = ? WHERE id = ?", (next_stage, tender_id))
+
 # -------------------------------------------------------------------------
 # Core Navigation Routes
 # -------------------------------------------------------------------------
@@ -224,6 +270,18 @@ def index():
         elif role == "bidder":
             return redirect(url_for("bidder_dashboard"))
     return redirect(url_for("login"))
+
+
+@app.route("/healthz")
+def health_check():
+    """Small unauthenticated health endpoint for Render and uptime checks."""
+    return jsonify({"status": "ok"}), 200
+
+
+@app.errorhandler(500)
+def internal_server_error(error):
+    logger.exception("Unhandled server error on %s %s", request.method, request.path)
+    return "Internal server error. Check the service logs for the request traceback.", 500
 
 # -------------------------------------------------------------------------
 # Authentication Routes
@@ -298,6 +356,38 @@ def logout():
 @app.route("/register", methods=["GET", "POST"])
 def register():
     if request.method == "POST":
+        pending_id = session.get("pending_registration_id")
+        submitted_otp = request.form.get("otp", "").strip()
+
+        if pending_id and submitted_otp:
+            pending = query_db(
+                "SELECT * FROM pending_registrations WHERE id = ?", (pending_id,), one=True
+            )
+            now = int(datetime.utcnow().timestamp())
+            if not pending or pending["expires_at"] < now:
+                session.pop("pending_registration_id", None)
+                flash("The OTP has expired. Please start registration again.", "error")
+                return render_template("bidder_register.html")
+            if pending["attempts"] >= 5:
+                session.pop("pending_registration_id", None)
+                flash("Too many incorrect OTP attempts. Please start registration again.", "error")
+                return render_template("bidder_register.html")
+
+            try:
+                payload = registration_otp_serializer.loads(pending["otp_hash"], max_age=600)
+                valid_otp = secrets.compare_digest(payload.get("otp", ""), submitted_otp)
+            except (BadSignature, SignatureExpired):
+                valid_otp = False
+            if not valid_otp:
+                execute_db("UPDATE pending_registrations SET attempts = attempts + 1 WHERE id = ?", (pending_id,))
+                flash("Invalid OTP. Please check your Gmail and try again.", "error")
+                return render_template("bidder_register.html", otp_pending=True)
+
+            registration = json.loads(pending["payload"])
+            execute_db("DELETE FROM pending_registrations WHERE id = ?", (pending_id,))
+            session.pop("pending_registration_id", None)
+            return _complete_bidder_registration(registration)
+
         name = request.form.get("name", "").strip()
         email = request.form.get("email", "").strip().lower()
         password = request.form.get("password", "")
@@ -325,7 +415,7 @@ def register():
             "PAN": _registration_verification_status(pan_result, "PAN"),
         }
         if any(result["state"] != "VERIFIED" for result in verification_statuses.values()):
-            flash("Registration saved values were not verified. Resolve the listed issues or continue with officer review.", "warning")
+            flash("Registration cannot continue until the listed GST/PAN verification issues are resolved.", "error")
             return render_template(
                 "bidder_register.html",
                 verification_statuses=verification_statuses,
@@ -338,55 +428,70 @@ def register():
             flash("An account with this email address already exists. Please sign in.", "error")
             return redirect(url_for("login"))
 
-        # Create user record
-        user_id = execute_db(
-            """
-            INSERT INTO users (username, password_hash, name, email, role, phone)
-            VALUES (?, ?, ?, ?, 'bidder', ?)
-            """,
-            (email, generate_password_hash(password), name, email, phone)
+        registration = {
+            "name": name, "email": email, "password": password, "phone": phone,
+            "company_name": company_name, "gstin": gstin, "pan": pan,
+            "udyam_reg_no": udyam_reg_no, "registered_address": registered_address,
+            "bidder_type": bidder_type, "msme_status": msme_status,
+            "startup_recognition_no": startup_recognition_no,
+            "nsic_registration_no": nsic_registration_no,
+            "local_supplier_category": local_supplier_category, "oem_status": oem_status,
+        }
+        registration["password_hash"] = generate_password_hash(registration.pop("password"))
+        if app.testing:
+            return _complete_bidder_registration(registration)
+
+        otp = f"{secrets.randbelow(1000000):06d}"
+        otp_token = registration_otp_serializer.dumps({"otp": otp})
+        pending_id = execute_db(
+            """INSERT OR REPLACE INTO pending_registrations
+               (email, payload, otp_hash, expires_at, attempts)
+               VALUES (?, ?, ?, ?, 0)""",
+            (email, json.dumps(registration), otp_token, int(datetime.utcnow().timestamp()) + 600),
         )
-
-        # Create bidder profile
-        execute_db(
-            """
-            INSERT INTO bidders (
-                user_id, company_name, pan, gstin, udyam_reg_no, registered_address,
-                contact_person, phone, email, bidder_type, msme_status,
-                startup_recognition_no, nsic_registration_no, local_supplier_category, oem_status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (user_id, company_name, pan, gstin, udyam_reg_no, registered_address, name, phone, email,
-             bidder_type, msme_status, startup_recognition_no, nsic_registration_no,
-             local_supplier_category, oem_status)
-        )
-
-        session["user_id"] = user_id
-        session["user_name"] = name
-        session["user_role"] = "bidder"
-        generate_csrf_token()
-
-        auth_token = auth_serializer.dumps({
-            "user_id": user_id,
-            "user_role": "bidder",
-            "user_name": name
-        })
-
-        log_audit_event("BIDDER_REGISTER", "bidders", user_id, f"Registered company {company_name}")
-        flash("Enterprise registration successful. Welcome to GeM Bid Compliance Platform!", "success")
-        resp = make_response(redirect(url_for("bidder_dashboard", auth_token=auth_token)))
-        resp.set_cookie(
-            "gem_auth_token",
-            auth_token,
-            secure=app.config["SESSION_COOKIE_SECURE"],
-            httponly=False,
-            samesite=app.config["SESSION_COOKIE_SAMESITE"],
-            partitioned=app.config["SESSION_COOKIE_PARTITIONED"],
-            max_age=7 * 86400
-        )
-        return resp
+        if not send_gmail_otp(email, otp):
+            execute_db("DELETE FROM pending_registrations WHERE id = ?", (pending_id,))
+            flash("Gmail OTP could not be sent. Check the Render GMAIL_USERNAME and GMAIL_APP_PASSWORD settings and the service logs.", "error")
+            return render_template("bidder_register.html", registration_values={"gstin": gstin, "pan": pan})
+        session["pending_registration_id"] = pending_id
+        flash(f"A verification OTP was sent to {email}. It expires in 10 minutes.", "success")
+        return render_template("bidder_register.html", otp_pending=True)
 
     return render_template("bidder_register.html")
+
+
+def _complete_bidder_registration(registration):
+     user_id = execute_db(
+          """INSERT INTO users (username, password_hash, name, email, role, phone)
+              VALUES (?, ?, ?, ?, 'bidder', ?)""",
+          (registration["email"], registration["password_hash"],
+            registration["name"], registration["email"], registration["phone"])
+     )
+     execute_db(
+          """INSERT INTO bidders (
+              user_id, company_name, pan, gstin, udyam_reg_no, registered_address,
+              contact_person, phone, email, bidder_type, msme_status,
+              startup_recognition_no, nsic_registration_no, local_supplier_category, oem_status
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+          (user_id, registration["company_name"], registration["pan"], registration["gstin"],
+            registration["udyam_reg_no"], registration["registered_address"], registration["name"],
+            registration["phone"], registration["email"], registration["bidder_type"],
+            registration["msme_status"], registration["startup_recognition_no"],
+            registration["nsic_registration_no"], registration["local_supplier_category"],
+            registration["oem_status"])
+     )
+     session["user_id"] = user_id
+     session["user_name"] = registration["name"]
+     session["user_role"] = "bidder"
+     generate_csrf_token()
+     auth_token = auth_serializer.dumps({"user_id": user_id, "user_role": "bidder", "user_name": registration["name"]})
+     log_audit_event("BIDDER_REGISTER", "bidders", user_id, f"Registered company {registration['company_name']}")
+     flash("Enterprise registration successful. Welcome to GeM Bid Compliance Platform!", "success")
+     resp = make_response(redirect(url_for("bidder_dashboard", auth_token=auth_token)))
+     resp.set_cookie("gem_auth_token", auth_token, secure=app.config["SESSION_COOKIE_SECURE"],
+                          httponly=False, samesite=app.config["SESSION_COOKIE_SAMESITE"],
+                          partitioned=app.config["SESSION_COOKIE_PARTITIONED"], max_age=7 * 86400)
+     return resp
 
 def _registration_verification_status(result, identifier_label):
     if result.get("is_valid") is True:
@@ -592,18 +697,19 @@ def admin_delete_assignment(assignment_id):
 @login_required
 def api_status():
     adapters = [
-        {"name": "Goods & Services Tax Network (GSTN)", "mode": os.environ.get("GST_MODE", "MOCK"), "description": "Active registration & GSTR filing verification", "disclaimer": "MOCK DATA — NOT LIVE GOVERNMENT VERIFICATION"},
-        {"name": "Income Tax Department (PAN)", "mode": os.environ.get("PAN_MODE", "MOCK"), "description": "PAN authenticity & income tax compliance dues", "disclaimer": "MOCK DATA — NOT LIVE GOVERNMENT VERIFICATION"},
-        {"name": "Udyam MSME Portal", "mode": os.environ.get("UDYAM_MODE", "MOCK"), "description": "Micro/Small/Medium enterprise classification", "disclaimer": "MOCK DATA — NOT LIVE GOVERNMENT VERIFICATION"},
-        {"name": "Ministry of Corporate Affairs (MCA)", "mode": os.environ.get("MCA_MODE", "MOCK"), "description": "Company active status & registered office", "disclaimer": "MOCK DATA — NOT LIVE GOVERNMENT VERIFICATION"},
-        {"name": "Employees' Provident Fund Organization (EPFO)", "mode": os.environ.get("EPFO_MODE", "MOCK"), "description": "Establishment compliance & active member verification", "disclaimer": "MOCK DATA — NOT LIVE GOVERNMENT VERIFICATION"},
-        {"name": "Employees' State Insurance (ESIC)", "mode": os.environ.get("ESIC_MODE", "MOCK"), "description": "Employer code & statutory insurance compliance", "disclaimer": "MOCK DATA — NOT LIVE GOVERNMENT VERIFICATION"},
-        {"name": "Startup India (DPIIT)", "mode": os.environ.get("STARTUP_MODE", "MOCK"), "description": "DIPP startup recognition & exemption qualification", "disclaimer": "MOCK DATA — NOT LIVE GOVERNMENT VERIFICATION"},
-        {"name": "National Small Industries Corporation (NSIC)", "mode": os.environ.get("NSIC_MODE", "MOCK"), "description": "Single Point Registration Scheme (SPRS)", "disclaimer": "MOCK DATA — NOT LIVE GOVERNMENT VERIFICATION"},
-        {"name": "Bureau of Indian Standards (BIS)", "mode": os.environ.get("BIS_MODE", "MOCK"), "description": "CRS / ISI license status & standards validity", "disclaimer": "MOCK DATA — NOT LIVE GOVERNMENT VERIFICATION"},
-        {"name": "CVC / GeM Central Debarment Database", "mode": os.environ.get("BLACKLIST_MODE", "MOCK"), "description": "Debarment orders & blacklisting checks", "disclaimer": "MOCK DATA — NOT LIVE GOVERNMENT VERIFICATION"},
-        {"name": "DigiLocker Verification", "mode": "MOCK", "description": "Document electronic URI authenticity", "disclaimer": "DIGILOCKER VERIFICATION CONTRACT"},
-        {"name": "GeM Bid Management API", "mode": os.environ.get("GEM_MODE", "MOCK"), "description": "Official GeM tender data import and specifications", "disclaimer": "MOCK / OFFICIAL GEM BID FETCHER"}
+        {"name": "Goods & Services Tax Network (GSTN)", "env_key": "GST_MODE", "mode": os.environ.get("GST_MODE", "MOCK"), "description": "Active registration & GSTR filing verification", "disclaimer": "MOCK DATA — NOT LIVE GOVERNMENT VERIFICATION"},
+        {"name": "Income Tax Department (PAN)", "env_key": "PAN_MODE", "mode": os.environ.get("PAN_MODE", "MOCK"), "description": "PAN authenticity & income tax compliance dues", "disclaimer": "MOCK DATA — NOT LIVE GOVERNMENT VERIFICATION"},
+        {"name": "Udyam MSME Portal", "env_key": "UDYAM_MODE", "mode": os.environ.get("UDYAM_MODE", "MOCK"), "description": "Micro/Small/Medium enterprise classification", "disclaimer": "MOCK DATA — NOT LIVE GOVERNMENT VERIFICATION"},
+        {"name": "Ministry of Corporate Affairs (MCA)", "env_key": "MCA_MODE", "mode": os.environ.get("MCA_MODE", "MOCK"), "description": "Company active status & registered office", "disclaimer": "MOCK DATA — NOT LIVE GOVERNMENT VERIFICATION"},
+        {"name": "Employees' Provident Fund Organization (EPFO)", "env_key": "EPFO_MODE", "mode": os.environ.get("EPFO_MODE", "MOCK"), "description": "Establishment compliance & active member verification", "disclaimer": "MOCK DATA — NOT LIVE GOVERNMENT VERIFICATION"},
+        {"name": "Employees' State Insurance (ESIC)", "env_key": "ESIC_MODE", "mode": os.environ.get("ESIC_MODE", "MOCK"), "description": "Employer code & statutory insurance compliance", "disclaimer": "MOCK DATA — NOT LIVE GOVERNMENT VERIFICATION"},
+        {"name": "Startup India (DPIIT)", "env_key": "STARTUP_MODE", "mode": os.environ.get("STARTUP_MODE", "MOCK"), "description": "DIPP startup recognition & exemption qualification", "disclaimer": "MOCK DATA — NOT LIVE GOVERNMENT VERIFICATION"},
+        {"name": "National Small Industries Corporation (NSIC)", "env_key": "NSIC_MODE", "mode": os.environ.get("NSIC_MODE", "MOCK"), "description": "Single Point Registration Scheme (SPRS)", "disclaimer": "MOCK DATA — NOT LIVE GOVERNMENT VERIFICATION"},
+        {"name": "Bureau of Indian Standards (BIS)", "env_key": "BIS_MODE", "mode": os.environ.get("BIS_MODE", "MOCK"), "description": "CRS / ISI license status & standards validity", "disclaimer": "MOCK DATA — NOT LIVE GOVERNMENT VERIFICATION"},
+        {"name": "CVC / GeM Central Debarment Database", "env_key": "BLACKLIST_MODE", "mode": os.environ.get("BLACKLIST_MODE", "MOCK"), "description": "Debarment orders & blacklisting checks", "disclaimer": "MOCK DATA — NOT LIVE GOVERNMENT VERIFICATION"},
+        {"name": "DigiLocker Verification", "env_key": "DIGILOCKER_MODE", "mode": os.environ.get("DIGILOCKER_MODE", "MOCK"), "description": "Document electronic URI authenticity", "disclaimer": "DIGILOCKER VERIFICATION CONTRACT"},
+        {"name": "DPIIT Make in India (MII) Portal", "env_key": "MII_MODE", "mode": os.environ.get("MII_MODE", "MOCK"), "description": "Class-I/II local supplier registration & local content %", "disclaimer": "MOCK DATA — NOT LIVE GOVERNMENT VERIFICATION"},
+        {"name": "GeM Bid Management API", "env_key": "GEM_MODE", "mode": os.environ.get("GEM_MODE", "MOCK"), "description": "Official GeM tender data import and specifications", "disclaimer": "MOCK / OFFICIAL GEM BID FETCHER"},
     ]
     test_result = session.pop("adapter_test_result", None)
     return render_template("api_status.html", adapters=adapters, test_result=test_result)
@@ -623,23 +729,30 @@ def notification_read(notification_id):
 @app.route("/api/test-adapter", methods=["POST"])
 @login_required
 def test_adapter():
-    adapter_name = request.form.get("adapter_name")
+    """
+    Admin diagnostic: pings a statutory adapter with a test identifier.
+    Shows full response including API errors when API is configured but failing.
+    Falls back to MOCK data automatically when no real API is configured.
+    """
+    adapter_name = request.form.get("adapter_name", "").strip().upper()
     identifier = request.form.get("identifier", "").strip()
-    res = {}
-    if adapter_name == "GST":
-        res = verify_gst(identifier)
-    elif adapter_name == "PAN":
-        res = verify_pan(identifier)
-    elif adapter_name == "UDYAM":
-        res = verify_udyam(identifier)
-    elif adapter_name == "MCA":
-        res = verify_mca(identifier)
-    elif adapter_name == "BLACKLIST":
-        res = verify_blacklisting(pan=identifier, gstin=identifier)
-    elif adapter_name == "BIS":
-        res = verify_bis(identifier)
-    else:
-        res = {"error": "Unknown adapter"}
+
+    # Use the unified ping_adapter that covers all adapters including new ones
+    res = ping_adapter(adapter_name, identifier)
+
+    # Flag errors prominently so admin knows the real API is broken
+    if res.get("source_mode") in ("ERROR",) or res.get("status") in ("EXCEPTION", "UNKNOWN_ADAPTER"):
+        res["_admin_alert"] = "ERROR"
+        res["_admin_message"] = res.get("message", "Unknown adapter error.")
+    elif res.get("source_mode") == "UNAVAILABLE" and res.get("api_error"):
+        res["_admin_alert"] = "API_ERROR"
+        res["_admin_message"] = f"API is configured but returned an error: {res.get('api_error')}"
+    elif res.get("source_mode") == "UNAVAILABLE":
+        res["_admin_alert"] = "UNAVAILABLE"
+        res["_admin_message"] = "API is not configured or temporarily unavailable. Using MOCK fallback for compliance checks."
+    elif res.get("source_mode") == "MOCK":
+        res["_admin_alert"] = "MOCK"
+        res["_admin_message"] = "Running in MOCK mode. Set real API credentials in .env to enable official verification."
 
     session["adapter_test_result"] = res
     return redirect(url_for("api_status"))
@@ -1049,7 +1162,7 @@ def bid_submit(tender_id):
     is_open, msg = is_bidding_open(tender_id)
     if not is_open:
         flash(f"Submission rejected: {msg}", "error")
-        return redirect(url_for("bidder_dashboard")), 400
+        return redirect(url_for("bidder_dashboard"))
 
     if request.method == "POST":
         # Handle legacy or sample bundle submission
@@ -1065,11 +1178,15 @@ def bid_submit(tender_id):
             flash("No documents selected for submission.", "error")
             return redirect(url_for("bid_submit", tender_id=tender_id))
 
-        save_and_process_uploaded_documents(
-            bidder_id=bidder["id"],
-            tender_id=tender_id,
-            files_list=files
-        )
+        try:
+            save_and_process_uploaded_documents(
+                bidder_id=bidder["id"],
+                tender_id=tender_id,
+                files_list=files
+            )
+        except ValueError as exc:
+            flash(f"Upload rejected: {exc}", "error")
+            return redirect(url_for("bid_submit", tender_id=tender_id))
 
         ver_res = run_bidder_verification(tender_id, bidder["id"])
         log_audit_event(
@@ -1255,12 +1372,17 @@ def bid_finalize(tender_id):
     if not bidder:
         abort(403)
 
+    is_open, msg = is_bidding_open(tender_id)
+    if not is_open:
+        flash(f"Final submission blocked: {msg}", "error")
+        return redirect(url_for("bid_submit", tender_id=tender_id))
+
     checklist_data = get_bidder_document_checklist(tender_id, bidder["id"])
     summary = checklist_data["summary"]
 
     if summary["missing_mandatory"] > 0:
         flash(f"Final submission blocked: {summary['missing_mandatory']} mandatory requirement(s) do not have documents uploaded.", "error")
-        return redirect(url_for("bid_submit", tender_id=tender_id)), 400
+        return redirect(url_for("bid_submit", tender_id=tender_id))
 
     ver_res = run_bidder_verification(tender_id, bidder["id"])
     log_audit_event(
@@ -1356,7 +1478,7 @@ def record_decision(verification_id):
         return redirect(request.referrer or url_for("officer_dashboard"))
 
     ver = query_db(
-        "SELECT tender_id, bidder_id FROM verifications WHERE id = ?",
+        "SELECT tender_id, bidder_id, officer_decision FROM verifications WHERE id = ?",
         (verification_id,),
         one=True
     )
@@ -1380,10 +1502,7 @@ def record_decision(verification_id):
     )
 
     log_audit_event("OFFICER_DECISION", "verifications", verification_id, f"Officer ruling: {decision}. Remarks: {remarks}")
-    execute_db(
-        "UPDATE tenders SET lifecycle_stage = 'DECIDED' WHERE id = ? AND lifecycle_stage != 'DECIDED'",
-        (ver["tender_id"],)
-    )
+    refresh_tender_decision_state(ver["tender_id"])
     bidder_user = query_db("SELECT user_id FROM bidders WHERE id = ?", (ver["bidder_id"],), one=True)
     if bidder_user:
         notify_user(
@@ -1393,6 +1512,143 @@ def record_decision(verification_id):
         )
     flash(f"Authoritative determination recorded: {decision}.", "success")
     return redirect(url_for("view_report", tender_id=ver["tender_id"], bidder_id=ver["bidder_id"]))
+
+# -------------------------------------------------------------------------
+# Compliance Dashboard — All Bidders Overview for a Tender
+# -------------------------------------------------------------------------
+@app.route("/officer/tenders/<int:tender_id>/dashboard")
+@login_required
+@role_required("officer", "admin")
+def compliance_dashboard(tender_id):
+    """
+    Compliance Dashboard: Shows all bidders on a tender with score bars,
+    risk badges, eligibility status and pending items at a glance.
+    """
+    require_tender_access(tender_id)
+    tender = query_db("SELECT * FROM tenders WHERE id = ?", (tender_id,), one=True)
+    if not tender:
+        abort(404, description="Tender not found.")
+
+    # All bidders who submitted for this tender
+    bidders_rows = query_db(
+        """
+        SELECT DISTINCT b.*
+        FROM bidders b
+        JOIN documents d ON b.id = d.bidder_id
+        WHERE d.tender_id = ?
+        """,
+        (tender_id,)
+    )
+
+    dashboard_bidders = []
+    for b in bidders_rows:
+        b_dict = dict(b)
+        ver = get_latest_verification(tender_id, b["id"])
+        if not ver:
+            # Auto-run verification if not yet done
+            ver = run_bidder_verification(tender_id, b["id"])
+            ver = get_latest_verification(tender_id, b["id"])
+        b_dict["verification"] = ver
+        b_dict["bidder_id"] = b["id"]
+
+        # Pending clarifications for this bidder
+        pending_clar = query_db(
+            "SELECT COUNT(*) as c FROM clarifications WHERE tender_id = ? AND bidder_id = ? AND status = 'PENDING'",
+            (tender_id, b["id"]),
+            one=True
+        )
+        b_dict["pending_clarifications"] = pending_clar["c"] if pending_clar else 0
+        dashboard_bidders.append(b_dict)
+
+    # Sort by score descending
+    dashboard_bidders.sort(key=lambda x: (x.get("verification") or {}).get("score", 0) or 0, reverse=True)
+
+    # Summary stats
+    total = len(dashboard_bidders)
+    eligible = sum(1 for b in dashboard_bidders if (b.get("verification") or {}).get("eligibility") == "ELIGIBLE")
+    not_eligible = sum(1 for b in dashboard_bidders if (b.get("verification") or {}).get("eligibility") == "NOT_ELIGIBLE")
+    needs_review = total - eligible - not_eligible
+    high_risk = sum(1 for b in dashboard_bidders if (b.get("verification") or {}).get("risk_level") == "HIGH")
+    decided = sum(1 for b in dashboard_bidders if (b.get("verification") or {}).get("officer_decision"))
+
+    summary = {
+        "total": total,
+        "eligible": eligible,
+        "not_eligible": not_eligible,
+        "needs_review": needs_review,
+        "high_risk": high_risk,
+        "decided": decided
+    }
+
+    return render_template(
+        "compliance_dashboard.html",
+        tender=tender,
+        bidders=dashboard_bidders,
+        summary=summary
+    )
+
+
+@app.route("/verifications/<int:tender_id>/<int:bidder_id>/reverify", methods=["POST"])
+@login_required
+@role_required("officer", "admin")
+def reverify_bidder(tender_id, bidder_id):
+    """Re-runs verification for a specific bidder on a tender."""
+    require_tender_access(tender_id)
+    ver_res = run_bidder_verification(tender_id, bidder_id, is_reverification=True)
+    log_audit_event(
+        "REVERIFICATION", "verifications", ver_res.get("id"),
+        f"Officer re-ran verification for bidder #{bidder_id} on tender #{tender_id}. Score: {ver_res['score']}"
+    )
+    flash(f"Re-verification complete. Updated compliance score: {ver_res['score']}/100.", "success")
+    return redirect(url_for("view_report", tender_id=tender_id, bidder_id=bidder_id))
+
+
+@app.route("/reports/<int:tender_id>/<int:bidder_id>/export")
+@login_required
+def export_report_pdf(tender_id, bidder_id):
+    """
+    Exports the compliance verification report as a printable HTML page.
+    The browser's print/save-as-PDF function handles the final PDF conversion.
+    All audit evidence is included for complete traceability.
+    """
+    user_id = session.get("user_id")
+    user_role = session.get("user_role")
+
+    if user_role == "bidder":
+        bidder = query_db("SELECT * FROM bidders WHERE user_id = ?", (user_id,), one=True)
+        if not bidder or bidder["id"] != bidder_id:
+            abort(403, description="Access forbidden.")
+    else:
+        bidder = query_db("SELECT * FROM bidders WHERE id = ?", (bidder_id,), one=True)
+        if user_role == "officer":
+            require_tender_access(tender_id)
+
+    tender = query_db("SELECT * FROM tenders WHERE id = ?", (tender_id,), one=True)
+    if not bidder or not tender:
+        abort(404, description="Report not found.")
+
+    verification = get_latest_verification(tender_id, bidder_id)
+    if not verification:
+        run_bidder_verification(tender_id, bidder_id)
+        verification = get_latest_verification(tender_id, bidder_id)
+
+    documents = get_documents_by_bidder_and_tender(bidder_id, tender_id)
+
+    log_audit_event(
+        "REPORT_EXPORTED", "verifications", verification["id"] if verification else None,
+        f"Compliance report exported for bidder #{bidder_id} on tender #{tender_id}"
+    )
+
+    # Render the report template with print mode enabled
+    return render_template(
+        "report.html",
+        tender=tender,
+        bidder=bidder,
+        verification=verification,
+        documents=documents,
+        print_mode=True
+    )
+
 
 # -------------------------------------------------------------------------
 # Clarification Routes
@@ -1423,10 +1679,17 @@ def clarification_create():
     ):
         abort(404, description="Bidder has no submission for this tender.")
 
+    verification = query_db(
+        "SELECT id FROM verifications WHERE id = ? AND tender_id = ? AND bidder_id = ?",
+        (int(ver_id), tender_id, bidder_id), one=True
+    ) if ver_id and str(ver_id).isdigit() else None
+    if ver_id and not verification:
+        abort(400, description="Verification does not belong to this bidder and tender.")
+
     clar_id = create_clarification_request(
         tender_id=tender_id,
         bidder_id=bidder_id,
-        verification_id=ver_id or 0,
+        verification_id=verification["id"] if verification else None,
         officer_id=session.get("user_id"),
         requirement_code=req_code,
         query_text=query_text
@@ -1545,4 +1808,5 @@ with app.app_context():
     seed_database()
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=3000, debug=False)
+    port = int(os.environ.get("PORT", "5000"))
+    app.run(host="0.0.0.0", port=port, debug=False)

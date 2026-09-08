@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% block title %}GeM Bid Compliance Verification Platform{% endblock %}</title>
+  <title>{% block title %}B.I.D.S.E.T.U. - Bidder Information &amp; Document Scrutiny Engine{% endblock %}</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -24,23 +24,21 @@
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div class="flex items-center justify-between h-16">
         <div class="flex items-center space-x-4">
-          <a href="/" class="flex items-center space-x-3 group">
-            <div class="h-10 w-10 rounded-lg bg-blue-600 flex items-center justify-center font-bold text-lg text-white shadow-inner group-hover:bg-blue-500 transition-colors">
-              GeM
-            </div>
-            <div>
-              <div class="font-bold text-base tracking-tight leading-none text-white flex items-center gap-2">
-                <span>Bid Compliance Platform</span>
-                <span class="text-[10px] uppercase font-mono tracking-wider px-1.5 py-0.5 rounded bg-slate-800 text-blue-300 border border-slate-700">SIH Decision Support</span>
+          <a href="/" class="flex items-center space-x-2 group min-w-0">
+            <img src="{{ url_for('static', filename='logo.png') }}" alt="B.I.D.S.E.T.U. logo"
+                 class="h-8 w-8 shrink-0 rounded-md object-contain bg-white shadow-inner group-hover:opacity-90 transition-opacity">
+            <div class="min-w-0">
+              <div class="font-bold text-sm sm:text-base tracking-tight leading-none text-white truncate">
+                B.I.D.S.E.T.U.
               </div>
-              <div class="text-xs text-slate-400 mt-1">Government e-Marketplace Integrated Verification</div>
+              <div class="text-[10px] sm:text-xs text-slate-400 mt-1 truncate">Bidder Information &amp; Document Scrutiny Engine</div>
             </div>
           </a>
         </div>
 
         <!-- Navigation Links -->
         <nav class="flex items-center space-x-3">
-          {% if current_user %}
+          {% if current_user and request.endpoint not in ('login', 'register') %}
             {% if current_user.role == 'admin' %}
               <a href="/admin" class="px-3 py-1.5 rounded-md text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 transition">Admin Dashboard</a>
               <a href="/tenders/import" class="px-3 py-1.5 rounded-md text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white transition">Import GeM Bid</a>
@@ -75,20 +73,6 @@
     </div>
   </header>
 
-  <!-- Statutory Verification Mode Disclaimer Notice -->
-  <div class="bg-blue-50 border-b border-blue-100 text-blue-900 py-1.5 px-4 text-xs">
-    <div class="max-w-7xl mx-auto flex items-center justify-between">
-      <div class="flex items-center space-x-2">
-        <span class="inline-block w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
-        <span class="font-semibold">Statutory Integration Engine:</span>
-        <span class="text-blue-700">Active mode is <strong class="font-mono">{{ config_get('GST_MODE', 'MOCK') }}</strong> with normalized response contracts. Live government APIs require registered departmental keys.</span>
-      </div>
-      <div class="hidden md:block text-[11px] text-blue-600">
-        GeM Tender Corrigendum & Decision Support Enabled
-      </div>
-    </div>
-  </div>
-
   <!-- Flash Messages -->
   <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
     {% with messages = get_flashed_messages(with_categories=true) %}
@@ -117,8 +101,8 @@
   <footer class="bg-white border-t border-slate-200 py-6 mt-12 text-xs text-slate-500">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row justify-between items-center gap-4">
       <div>
-        <p class="font-medium text-slate-700">AI-Powered Integrated Bid Compliance Verification Platform</p>
-        <p class="text-slate-400 mt-0.5">Designed for Government e-Marketplace (GeM) &bull; Decision Support System</p>
+        <p class="font-medium text-slate-700">B.I.D.S.E.T.U.</p>
+        <p class="text-slate-400 mt-0.5">Bidder Information &amp; Document Scrutiny Engine</p>
       </div>
       <div class="flex items-center space-x-4 font-mono text-[11px]">
         <span>Deterministic Rule Engine</span>
@@ -132,6 +116,11 @@
 
   <!-- Client-side IFrame Session & Token Persistence Helper -->
   <script>
+    document.querySelectorAll('.score-bar[data-score]').forEach(function(bar) {
+      const score = Math.max(0, Math.min(100, Number(bar.dataset.score) || 0));
+      bar.style.width = score + '%';
+    });
+
     (function() {
       // 1. Capture token from URL query params (if passed during redirect)
       const urlParams = new URLSearchParams(window.location.search);

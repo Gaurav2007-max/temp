@@ -1,0 +1,249 @@
+{% extends "base.html" %}
+
+{% block title %}Compliance Dashboard - B.I.D.S.E.T.U. - {{ tender.gem_bid_id }}{% endblock %}
+
+{% block content %}
+<div class="space-y-6 max-w-7xl mx-auto">
+
+  <!-- Header -->
+  <div class="flex items-start justify-between pb-4 border-b border-slate-200">
+    <div>
+      <div class="flex items-center gap-2 mb-1">
+        <a href="/tenders/{{ tender.id }}" class="text-xs text-blue-600 hover:underline font-semibold">&larr; Tender Detail</a>
+        <span class="text-xs text-slate-400">/</span>
+        <span class="text-xs font-mono text-slate-600 font-semibold">{{ tender.gem_bid_id }}</span>
+      </div>
+      <h1 class="text-xl font-bold text-slate-900">Compliance Dashboard</h1>
+      <p class="text-xs text-slate-500 mt-0.5">{{ tender.title }} &mdash; {{ tender.organization }}</p>
+    </div>
+    <div class="flex items-center gap-3">
+      <a href="/officer/tenders/{{ tender.id }}/dashboard" class="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-50 rounded text-xs font-semibold text-slate-700 shadow-sm flex items-center gap-1.5 transition">
+        <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+        Refresh
+      </a>
+    </div>
+  </div>
+
+  <!-- Summary Stats Strip -->
+  <div class="grid grid-cols-2 md:grid-cols-6 gap-4">
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 text-center">
+      <div class="text-2xl font-extrabold text-slate-900">{{ summary.total }}</div>
+      <div class="text-[11px] text-slate-500 uppercase tracking-wider font-semibold mt-0.5">Total Bidders</div>
+    </div>
+    <div class="bg-emerald-50 rounded-xl border border-emerald-200 shadow-sm p-4 text-center">
+      <div class="text-2xl font-extrabold text-emerald-700">{{ summary.eligible }}</div>
+      <div class="text-[11px] text-emerald-600 uppercase tracking-wider font-semibold mt-0.5">Eligible</div>
+    </div>
+    <div class="bg-rose-50 rounded-xl border border-rose-200 shadow-sm p-4 text-center">
+      <div class="text-2xl font-extrabold text-rose-700">{{ summary.not_eligible }}</div>
+      <div class="text-[11px] text-rose-600 uppercase tracking-wider font-semibold mt-0.5">Not Eligible</div>
+    </div>
+    <div class="bg-amber-50 rounded-xl border border-amber-200 shadow-sm p-4 text-center">
+      <div class="text-2xl font-extrabold text-amber-700">{{ summary.needs_review }}</div>
+      <div class="text-[11px] text-amber-600 uppercase tracking-wider font-semibold mt-0.5">Needs Review</div>
+    </div>
+    <div class="bg-rose-50 rounded-xl border border-rose-200 shadow-sm p-4 text-center">
+      <div class="text-2xl font-extrabold text-rose-700">{{ summary.high_risk }}</div>
+      <div class="text-[11px] text-rose-600 uppercase tracking-wider font-semibold mt-0.5">High Risk</div>
+    </div>
+    <div class="bg-blue-50 rounded-xl border border-blue-200 shadow-sm p-4 text-center">
+      <div class="text-2xl font-extrabold text-blue-700">{{ summary.decided }}</div>
+      <div class="text-[11px] text-blue-600 uppercase tracking-wider font-semibold mt-0.5">Decided</div>
+    </div>
+  </div>
+
+  {% if not bidders %}
+  <!-- Empty State -->
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-12 text-center">
+    <svg class="w-12 h-12 text-slate-300 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+    <p class="text-slate-500 font-semibold">No bidders have submitted documents for this tender yet.</p>
+    <p class="text-xs text-slate-400 mt-1">Once bidders upload compliance documents, their verification scores will appear here.</p>
+  </div>
+  {% else %}
+
+  <!-- Bidder Compliance Table -->
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+    <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+      <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wider">Bidder Compliance Overview</h2>
+      <span class="text-xs text-slate-500">Sorted by compliance score (highest first)</span>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-xs">
+        <thead class="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200 uppercase tracking-wider">
+          <tr>
+            <th class="px-5 py-3">Rank</th>
+            <th class="px-5 py-3">Bidder / Company</th>
+            <th class="px-5 py-3">Compliance Score</th>
+            <th class="px-5 py-3">Eligibility</th>
+            <th class="px-5 py-3">Risk Level</th>
+            <th class="px-5 py-3">Decision</th>
+            <th class="px-5 py-3">Pending</th>
+            <th class="px-5 py-3">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          {% for b in bidders %}
+          {% set ver = b.verification %}
+          {% set score = ver.score if ver else 0 %}
+          {% set eligibility = ver.eligibility if ver else 'NEEDS_REVIEW' %}
+          {% set risk = ver.risk_level if ver else 'MEDIUM' %}
+          {% set decision = ver.officer_decision if ver else None %}
+
+          <tr class="hover:bg-slate-50 transition {% if risk == 'HIGH' %}bg-rose-50/30{% endif %}">
+            <!-- Rank -->
+            <td class="px-5 py-4 font-bold text-slate-500">
+              {% set loop_idx = loop.index %}
+              {% if loop_idx == 1 %}
+                <span class="text-emerald-600">🥇 #1</span>
+              {% elif loop_idx == 2 %}
+                <span class="text-blue-600">🥈 #2</span>
+              {% elif loop_idx == 3 %}
+                <span class="text-amber-600">🥉 #3</span>
+              {% else %}
+                <span class="text-slate-500">#{{ loop_idx }}</span>
+              {% endif %}
+            </td>
+
+            <!-- Bidder Name -->
+            <td class="px-5 py-4">
+              <div class="font-semibold text-slate-900">{{ b.company_name }}</div>
+              <div class="text-[11px] text-slate-400 font-mono mt-0.5">PAN: {{ b.pan or '—' }} | GSTIN: {{ b.gstin or '—' }}</div>
+              {% if b.msme_status %}
+              <span class="inline-block mt-1 px-1.5 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-mono rounded">{{ b.msme_status }}</span>
+              {% endif %}
+            </td>
+
+            <!-- Score Bar -->
+            <td class="px-5 py-4" style="min-width: 180px">
+              <div class="flex items-center gap-2">
+                <div class="flex-1 bg-slate-200 rounded-full h-2.5 overflow-hidden">
+                  <div class="score-bar h-2.5 rounded-full transition-all
+                    {% if score >= 80 %}bg-emerald-500
+                    {% elif score >= 60 %}bg-blue-500
+                    {% elif score >= 40 %}bg-amber-500
+                    {% else %}bg-rose-500{% endif %}"
+                    data-score="{{ score }}">
+                  </div>
+                </div>
+                <span class="font-bold text-sm
+                  {% if score >= 80 %}text-emerald-700
+                  {% elif score >= 60 %}text-blue-700
+                  {% elif score >= 40 %}text-amber-700
+                  {% else %}text-rose-700{% endif %}">
+                  {{ score }}
+                </span>
+                <span class="text-slate-400 text-[11px]">/ 100</span>
+              </div>
+            </td>
+
+            <!-- Eligibility Badge -->
+            <td class="px-5 py-4">
+              <span class="px-2 py-0.5 rounded text-[11px] font-bold
+                {% if eligibility == 'ELIGIBLE' %}bg-emerald-50 text-emerald-700 border border-emerald-200
+                {% elif eligibility == 'NOT_ELIGIBLE' %}bg-rose-50 text-rose-700 border border-rose-200
+                {% else %}bg-amber-50 text-amber-700 border border-amber-200{% endif %}">
+                {{ eligibility.replace('_', ' ') }}
+              </span>
+            </td>
+
+            <!-- Risk Badge -->
+            <td class="px-5 py-4">
+              <span class="flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold w-fit
+                {% if risk == 'HIGH' %}bg-rose-50 text-rose-700 border border-rose-200
+                {% elif risk == 'MEDIUM' %}bg-amber-50 text-amber-700 border border-amber-200
+                {% else %}bg-emerald-50 text-emerald-700 border border-emerald-200{% endif %}">
+                <span class="w-1.5 h-1.5 rounded-full {% if risk == 'HIGH' %}bg-rose-500{% elif risk == 'MEDIUM' %}bg-amber-500{% else %}bg-emerald-500{% endif %}"></span>
+                {{ risk }}
+              </span>
+            </td>
+
+            <!-- Officer Decision -->
+            <td class="px-5 py-4">
+              {% if decision %}
+                <span class="px-2 py-0.5 rounded text-[11px] font-bold
+                  {% if decision == 'QUALIFIED' %}bg-emerald-100 text-emerald-800 border border-emerald-300
+                  {% else %}bg-rose-100 text-rose-800 border border-rose-300{% endif %}">
+                  {{ decision }}
+                </span>
+              {% else %}
+                <span class="text-slate-400 text-[11px] italic">Pending</span>
+              {% endif %}
+            </td>
+
+            <!-- Pending Clarifications -->
+            <td class="px-5 py-4">
+              {% if b.pending_clarifications > 0 %}
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                  <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd"/></svg>
+                  {{ b.pending_clarifications }} Pending
+                </span>
+              {% else %}
+                <span class="text-slate-300 text-[11px]">—</span>
+              {% endif %}
+            </td>
+
+            <!-- Actions -->
+            <td class="px-5 py-4">
+              <div class="flex items-center gap-2 flex-wrap">
+                <a href="/reports/{{ tender.id }}/{{ b.bidder_id }}" class="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-semibold rounded shadow-sm transition">
+                  Full Report
+                </a>
+                <a href="/reports/{{ tender.id }}/{{ b.bidder_id }}/export" target="_blank" class="px-2.5 py-1 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-[11px] font-semibold rounded shadow-sm transition">
+                  Export
+                </a>
+                {% if not decision %}
+                <form action="/verifications/{{ tender.id }}/{{ b.bidder_id }}/reverify" method="POST" class="inline">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" class="px-2.5 py-1 bg-white border border-slate-300 hover:bg-blue-50 text-slate-600 hover:text-blue-700 text-[11px] font-semibold rounded shadow-sm transition">
+                    Re-Verify
+                  </button>
+                </form>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Risk Flags Summary Panel -->
+  {% set high_risk_bidders = bidders | selectattr('verification') | selectattr('verification.risk_level', 'equalto', 'HIGH') | list %}
+  {% if high_risk_bidders %}
+  <div class="bg-rose-50 border border-rose-200 rounded-xl p-5">
+    <div class="flex items-center gap-2 mb-3">
+      <svg class="w-4 h-4 text-rose-600 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
+      <h3 class="text-sm font-bold text-rose-800">High Risk Bidder Alerts</h3>
+    </div>
+    <div class="space-y-2">
+      {% for b in high_risk_bidders %}
+      {% set ver = b.verification %}
+      <div class="bg-white rounded-lg border border-rose-200 p-3">
+        <div class="flex items-center justify-between">
+          <span class="font-semibold text-sm text-rose-900">{{ b.company_name }}</span>
+          <a href="/reports/{{ tender.id }}/{{ b.bidder_id }}" class="text-xs text-rose-700 hover:underline font-semibold">View Report →</a>
+        </div>
+        {% if ver and ver.risk_factors %}
+        <ul class="mt-2 space-y-1">
+          {% for rf in ver.risk_factors[:3] %}
+          <li class="text-xs text-rose-700 flex items-start gap-1.5">
+            <span class="mt-0.5 w-1 h-1 rounded-full bg-rose-400 shrink-0"></span>
+            {{ rf }}
+          </li>
+          {% endfor %}
+          {% if ver.risk_factors | length > 3 %}
+          <li class="text-xs text-rose-500 italic">+{{ ver.risk_factors | length - 3 }} more risk factors...</li>
+          {% endif %}
+        </ul>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% endif %}
+</div>
+{% endblock %}
+

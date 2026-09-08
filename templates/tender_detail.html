@@ -19,6 +19,11 @@
           Official Bid PDF
         </a>
       {% endif %}
+      <a href="/officer/tenders/{{ tender.id }}/dashboard"
+         class="px-3 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 rounded text-xs font-semibold shadow-sm flex items-center gap-1.5 transition">
+        <svg class="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+        Compliance Dashboard
+      </a>
       <button type="button" onclick="document.getElementById('corrigendum-modal').classList.remove('hidden')"
               class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded text-xs font-semibold shadow-sm transition">
         + Publish Corrigendum
@@ -113,6 +118,11 @@
         <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wider">Bidder Submissions & Deterministic Evaluation</h2>
         <p class="text-xs text-slate-500 mt-0.5">Automated compliance scoring, independent eligibility gating, and risk indicators</p>
       </div>
+      <a href="/officer/tenders/{{ tender.id }}/dashboard"
+         class="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 rounded text-xs font-semibold shadow-sm transition whitespace-nowrap">
+        <svg class="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+        Compliance Dashboard &rarr;
+      </a>
     </div>
 
     <div class="overflow-x-auto">
@@ -146,7 +156,7 @@
                     <span class="text-slate-400 text-[10px]">/ 100</span>
                   </div>
                   <div class="w-20 bg-slate-200 rounded-full h-1.5 mt-1 overflow-hidden">
-                    <div class="bg-blue-600 h-1.5 rounded-full" style="width: {{ b.verification.score }}%"></div>
+                    <div class="score-bar bg-blue-600 h-1.5 rounded-full" data-score="{{ b.verification.score }}"></div>
                   </div>
                 {% else %}
                   <span class="text-slate-400 italic">Not evaluated</span>
@@ -195,16 +205,21 @@
                   <span class="text-slate-400 italic">Pending Ruling</span>
                 {% endif %}
               </td>
-              <td class="px-6 py-4 text-right space-x-2">
-                <a href="/reports/{{ tender.id }}/{{ b.bidder_id }}"
-                   class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold shadow-sm transition">
-                  Audit Report & Ruling &rarr;
-                </a>
+              <td class="px-6 py-4 text-right whitespace-nowrap">
+                <div class="flex flex-col items-end gap-2">
+                  <a href="/reports/{{ tender.id }}/{{ b.bidder_id }}"
+                     class="inline-flex items-center justify-center px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-[11px] font-bold leading-none shadow-sm transition whitespace-nowrap">
+                    Audit Report &amp; Ruling &rarr;
+                  </a>
                 <button type="button"
-                        onclick="openClarificationModal('{{ b.bidder_id }}', '{{ b.company_name }}', '{{ b.verification.id if b.verification else 0 }}')"
-                        class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-xs font-semibold border border-slate-300 transition">
-                  Query
-                </button>
+                  data-bidder-id="{{ b.bidder_id }}"
+                  data-bidder-name="{{ b.company_name }}"
+                  data-verification-id="{{ b.verification.id if b.verification else 0 }}"
+                  onclick="openClarificationModal(this)"
+                        class="inline-flex items-center justify-center px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[11px] font-bold leading-none border border-slate-300 transition">
+                    Query
+                  </button>
+                </div>
               </td>
             </tr>
           {% else %}
@@ -401,10 +416,10 @@
 </div>
 
 <script>
-  function openClarificationModal(bidderId, bidderName, verId) {
-    document.getElementById('modal_bidder_id').value = bidderId;
-    document.getElementById('modal_bidder_name').value = bidderName;
-    document.getElementById('modal_ver_id').value = verId;
+  function openClarificationModal(button) {
+    document.getElementById('modal_bidder_id').value = button.dataset.bidderId;
+    document.getElementById('modal_bidder_name').value = button.dataset.bidderName;
+    document.getElementById('modal_ver_id').value = button.dataset.verificationId;
     document.getElementById('clarification-modal').classList.remove('hidden');
   }
 </script>

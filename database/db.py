@@ -245,6 +245,16 @@ CREATE TABLE IF NOT EXISTS notifications (
     FOREIGN KEY (recipient_user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS pending_registrations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT UNIQUE NOT NULL,
+    payload TEXT NOT NULL,
+    otp_hash TEXT NOT NULL,
+    expires_at INTEGER NOT NULL,
+    attempts INTEGER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_tenders_gem_id ON tenders(gem_bid_id);
@@ -252,6 +262,7 @@ CREATE INDEX IF NOT EXISTS idx_documents_bidder_tender ON documents(bidder_id, t
 CREATE INDEX IF NOT EXISTS idx_verifications_bidder_tender ON verifications(bidder_id, tender_id);
 CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_logs(timestamp);
 CREATE INDEX IF NOT EXISTS idx_notifications_recipient ON notifications(recipient_user_id, status, created_at);
+CREATE INDEX IF NOT EXISTS idx_pending_registrations_email ON pending_registrations(email);
 """
 
 def get_db_connection(db_path=None):

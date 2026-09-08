@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Audit Report & Decision Support - {{ bidder.company_name }}{% endblock %}
+{% block title %}Audit Report - B.I.D.S.E.T.U. - {{ bidder.company_name }}{% endblock %}
 
 {% block content %}
 <div class="space-y-6 max-w-5xl mx-auto my-4 print:m-0 print:max-w-none">
@@ -468,7 +468,7 @@
               </td>
               <td class="px-6 py-3 font-mono">{{ d.page_count }}</td>
               <td class="px-6 py-3">
-                <a href="/documents/{{ d.id }}/view" target="_blank" class="text-blue-600 hover:underline font-semibold">
+                <a href="/documents/view/{{ d.id }}" target="_blank" class="text-blue-600 hover:underline font-semibold">
                   Inspect &rarr;
                 </a>
               </td>

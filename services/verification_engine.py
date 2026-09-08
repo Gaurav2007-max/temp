@@ -5,7 +5,7 @@ from database.db import get_db, execute_db, query_db
 from services.statutory_service import (
     verify_gst, verify_pan, verify_udyam, verify_mca, verify_epfo,
     verify_esic, verify_startup, verify_nsic, verify_bis,
-    verify_blacklisting, verify_digilocker
+    verify_blacklisting, verify_digilocker, verify_mii
 )
 from services.document_service import (
     get_documents_by_bidder_and_tender,
@@ -83,6 +83,7 @@ def run_bidder_verification(tender_id, bidder_id, is_reverification=False):
     statutory_results["NSIC"] = verify_nsic(pan)
     statutory_results["BIS"] = verify_bis(pan)
     statutory_results["BLACKLIST"] = verify_blacklisting(pan=pan, gstin=gstin)
+    statutory_results["MII"] = verify_mii(pan or gstin)
 
     # 2. Cross-Source Identity & Conflict Detection
     conflicts = []
@@ -578,28 +579,92 @@ def run_bidder_verification(tender_id, bidder_id, is_reverification=False):
         elif code == "REQ_MII":
             min_lc = float(req["threshold_value"] or tender["min_local_content"] or 50)
             mii_docs = [d for d in documents if d["doc_type"] in ("LOCAL_CONTENT_DECLARATION", "MII_CERTIFICATE", "MII_DECLARATION")]
-            declared_lc = 0.0
-            if mii_docs:
-                fields = mii_docs[0].get("fields") or {}
-                declared_lc = float(fields.get("local_content_percentage", 65.0))
-            else:
-                declared_lc = 0.0
 
-            eval_res["evidence"]["declared_percentage"] = declared_lc
+            # --- Primary: DPIIT MII portal verification ---
+            mii_portal_res = statutory_results.get("MII", {})
+            eval_res["evidence"]["dpiit_portal_response"] = mii_portal_res
             eval_res["evidence"]["required_percentage"] = min_lc
 
-            if declared_lc >= min_lc:
+            portal_lc = mii_portal_res.get("local_content_percentage")
+            portal_category = mii_portal_res.get("category", "Unknown")
+            portal_valid = mii_portal_res.get("is_valid")
+            portal_mode = mii_portal_res.get("source_mode", "MOCK")
+            dpiit_reg = mii_portal_res.get("dpiit_registration_no", "")
+
+            # --- Secondary: Self-declared document ---
+            declared_lc = None
+            if mii_docs:
+                fields = mii_docs[0].get("fields") or {}
+                raw_lc = fields.get("local_content_percentage")
+                if raw_lc is not None:
+                    try:
+                        declared_lc = float(raw_lc)
+                    except (ValueError, TypeError):
+                        declared_lc = None
+
+            eval_res["evidence"]["dpiit_category"] = portal_category
+            eval_res["evidence"]["dpiit_registration_no"] = dpiit_reg or "Not Registered"
+            eval_res["evidence"]["portal_local_content_percentage"] = portal_lc
+            eval_res["evidence"]["declared_local_content_percentage"] = declared_lc
+
+            # Determine effective LC% (portal takes precedence over self-declaration)
+            effective_lc = portal_lc if portal_lc is not None else declared_lc
+
+            if portal_mode == "UNAVAILABLE":
+                # Portal unavailable — fall back to self-declared document only
+                if declared_lc is None:
+                    eval_res["status"] = "NEEDS_REVIEW"
+                    eval_res["score_awarded"] = weight * 0.5
+                    eval_res["issues"].append("DPIIT MII portal unavailable and no MII declaration document found.")
+                    eval_res["explanation"] = "DPIIT MII portal unavailable. No self-declared MII document submitted. Officer verification required."
+                    any_needs_review = True
+                elif declared_lc >= min_lc:
+                    eval_res["status"] = "NEEDS_REVIEW"
+                    eval_res["score_awarded"] = weight * 0.8
+                    eval_res["issues"].append("DPIIT MII portal unavailable. Accepted self-declared local content for now; officer verification required.")
+                    eval_res["explanation"] = f"DPIIT portal UNAVAILABLE — using self-declared {declared_lc}% (>={min_lc}% required). Pending portal confirmation."
+                    any_needs_review = True
+                else:
+                    eval_res["status"] = "FAIL" if is_mand else "NEEDS_REVIEW"
+                    eval_res["score_awarded"] = 0 if is_mand else weight * 0.4
+                    eval_res["issues"].append(f"Self-declared local content {declared_lc}% is below required {min_lc}%.")
+                    eval_res["explanation"] = f"FAIL: Self-declared {declared_lc}% is below minimum {min_lc}% and portal unavailable for verification."
+                    if is_mand:
+                        any_mandatory_failed = True
+            elif effective_lc is None:
+                # Neither portal data nor self-declaration available
+                eval_res["status"] = "FAIL" if is_mand else "NEEDS_REVIEW"
+                eval_res["score_awarded"] = 0
+                eval_res["issues"].append("No MII local content data found from DPIIT portal or submitted documents.")
+                eval_res["explanation"] = "FAIL: No local content data available — neither DPIIT portal nor MII declaration document."
+                risk_factors.append("No Make in India / local content verification available")
+                if is_mand:
+                    any_mandatory_failed = True
+                else:
+                    any_needs_review = True
+            elif effective_lc >= min_lc:
+                source = "DPIIT Portal" if portal_lc is not None else "Self-Declaration"
+                class_label = portal_category if portal_category not in ("Unknown", "Not Registered") else "Self-Certified"
                 eval_res["status"] = "PASS"
                 eval_res["score_awarded"] = weight
-                eval_res["explanation"] = f"PASS: Declared local content of {declared_lc}% meets the Class-I Local Supplier threshold (minimum {min_lc}%)."
+                reg_info = f" DPIIT Reg: {dpiit_reg}." if dpiit_reg else ""
+                eval_res["explanation"] = (
+                    f"PASS: Local content {effective_lc}% meets minimum {min_lc}% requirement. "
+                    f"Classification: {class_label} ({source}).{reg_info}"
+                )
             else:
+                source = "DPIIT Portal" if portal_lc is not None else "Self-Declaration"
                 eval_res["status"] = "FAIL"
                 eval_res["score_awarded"] = 0
-                eval_res["issues"].append(f"Declared local content {declared_lc}% is below tender requirement {min_lc}%.")
-                eval_res["explanation"] = f"FAIL: Declared local content of {declared_lc}% is below the minimum required {min_lc}%."
+                eval_res["issues"].append(f"Local content {effective_lc}% ({source}) is below required {min_lc}%.")
+                eval_res["explanation"] = (
+                    f"FAIL: {source} shows {effective_lc}% local content, below required {min_lc}%. "
+                    f"Category: {portal_category}. Bidder does not qualify as Class-I/II local supplier."
+                )
                 risk_factors.append("Local content below required Make in India threshold")
                 if is_mand:
                     any_mandatory_failed = True
+
 
         # ----------------------------------------------------
         # --- H. BIS LICENSE REQUIREMENT (REQ_BIS) ---
@@ -638,9 +703,218 @@ def run_bidder_verification(tender_id, bidder_id, is_reverification=False):
                 eval_res["explanation"] = f"Udyam registration not active: {udyam_res.get('message')}. General eligibility unaffected unless claiming MSME exemption."
 
         # ----------------------------------------------------
+        # --- K. EPFO COMPLIANCE (REQ_EPFO) ---
+        # ----------------------------------------------------
+        elif code == "REQ_EPFO":
+            epfo_res = statutory_results["EPFO"]
+            eval_res["evidence"]["statutory_response"] = epfo_res
+            if epfo_res.get("source_mode") == "UNAVAILABLE":
+                eval_res["status"] = "UNAVAILABLE"
+                eval_res["score_awarded"] = weight * 0.5
+                eval_res["explanation"] = "EPFO unified portal unavailable. Manual compliance check required."
+                any_needs_review = True
+            elif not epfo_res.get("is_valid"):
+                if epfo_res.get("source_mode") == "MOCK" and epfo_res.get("status") == "NOT_FOUND":
+                    eval_res["status"] = "NEEDS_REVIEW"
+                    eval_res["score_awarded"] = weight * 0.5
+                    eval_res["issues"].append("EPFO establishment record not found in registry. Manual officer check required.")
+                    eval_res["explanation"] = "EPFO compliance could not be verified from registry — record not found."
+                    any_needs_review = True
+                else:
+                    eval_res["status"] = "FAIL" if is_mand else "NEEDS_REVIEW"
+                    eval_res["score_awarded"] = 0 if is_mand else weight * 0.4
+                    pending = epfo_res.get("data", {}).get("pending_dues", 0)
+                    msg = f"EPFO non-compliant: pending dues ₹{pending:,.0f}" if pending else epfo_res.get("message", "Non-compliant")
+                    eval_res["issues"].append(msg)
+                    eval_res["explanation"] = f"EPFO compliance failure: {msg}."
+                    risk_factors.append("EPFO statutory non-compliance or pending dues")
+                    if is_mand:
+                        any_mandatory_failed = True
+            else:
+                eval_res["status"] = "PASS"
+                eval_res["score_awarded"] = weight
+                members = epfo_res.get("active_members", "N/A")
+                eval_res["explanation"] = f"PASS: EPFO compliance verified. Active covered employees: {members}."
+
+        # ----------------------------------------------------
+        # --- L. ESIC COMPLIANCE (REQ_ESIC) ---
+        # ----------------------------------------------------
+        elif code == "REQ_ESIC":
+            esic_res = statutory_results["ESIC"]
+            eval_res["evidence"]["statutory_response"] = esic_res
+            if esic_res.get("source_mode") == "UNAVAILABLE":
+                eval_res["status"] = "UNAVAILABLE"
+                eval_res["score_awarded"] = weight * 0.5
+                eval_res["explanation"] = "ESIC portal unavailable. Manual verification required."
+                any_needs_review = True
+            elif not esic_res.get("is_valid"):
+                if esic_res.get("source_mode") == "MOCK" and esic_res.get("status") == "NOT_FOUND":
+                    eval_res["status"] = "NEEDS_REVIEW"
+                    eval_res["score_awarded"] = weight * 0.5
+                    eval_res["issues"].append("ESIC employer code not found. May be exempt if <10 employees. Officer verification required.")
+                    eval_res["explanation"] = "ESIC record not found — may be exempt or requires manual verification."
+                    any_needs_review = True
+                else:
+                    eval_res["status"] = "FAIL" if is_mand else "NEEDS_REVIEW"
+                    eval_res["score_awarded"] = 0 if is_mand else weight * 0.4
+                    eval_res["issues"].append(f"ESIC non-compliant: {esic_res.get('message', 'Non-compliant')}")
+                    eval_res["explanation"] = f"ESIC compliance failure: {esic_res.get('message')}."
+                    risk_factors.append("ESIC statutory non-compliance")
+                    if is_mand:
+                        any_mandatory_failed = True
+            else:
+                eval_res["status"] = "PASS"
+                eval_res["score_awarded"] = weight
+                eval_res["explanation"] = f"PASS: ESIC employer compliance verified — {esic_res.get('message', 'Compliant')}."
+
+        # ----------------------------------------------------
+        # --- M. MCA21 COMPANY STATUS (REQ_MCA) ---
+        # ----------------------------------------------------
+        elif code == "REQ_MCA":
+            mca_res = statutory_results["MCA"]
+            eval_res["evidence"]["statutory_response"] = mca_res
+            if mca_res.get("source_mode") == "UNAVAILABLE":
+                eval_res["status"] = "UNAVAILABLE"
+                eval_res["score_awarded"] = weight * 0.5
+                eval_res["explanation"] = "MCA21 portal unavailable. Manual company status verification required."
+                any_needs_review = True
+            elif not mca_res.get("is_valid"):
+                if mca_res.get("source_mode") == "MOCK" and mca_res.get("status") == "NOT_FOUND":
+                    eval_res["status"] = "NEEDS_REVIEW"
+                    eval_res["score_awarded"] = weight * 0.5
+                    eval_res["issues"].append("MCA21 company record not found. Manual CIN/PAN verification required.")
+                    eval_res["explanation"] = "MCA company record not found — could be partnership/proprietorship. Officer check required."
+                    any_needs_review = True
+                else:
+                    eval_res["status"] = "FAIL" if is_mand else "NEEDS_REVIEW"
+                    eval_res["score_awarded"] = 0 if is_mand else weight * 0.4
+                    eval_res["issues"].append(f"MCA21 company inactive/struck-off: {mca_res.get('message')}")
+                    eval_res["explanation"] = f"Company appears inactive or struck-off on MCA21: {mca_res.get('message')}."
+                    risk_factors.append("Company struck-off or inactive on MCA21")
+                    if is_mand:
+                        any_mandatory_failed = True
+            else:
+                eval_res["status"] = "PASS"
+                eval_res["score_awarded"] = weight
+                co_name = mca_res.get("company_name") or mca_res.get("data", {}).get("company_name", "")
+                eval_res["explanation"] = f"PASS: Company '{co_name}' is active and in good standing on MCA21."
+
+        # ----------------------------------------------------
+        # --- N. STARTUP INDIA / DPIIT RECOGNITION (REQ_STARTUP) ---
+        # ----------------------------------------------------
+        elif code == "REQ_STARTUP":
+            startup_res = statutory_results["STARTUP"]
+            eval_res["evidence"]["statutory_response"] = startup_res
+            if startup_res.get("source_mode") == "UNAVAILABLE":
+                eval_res["status"] = "UNAVAILABLE"
+                eval_res["score_awarded"] = weight * 0.5
+                eval_res["explanation"] = "Startup India portal unavailable. Manual DPIIT recognition check required."
+                any_needs_review = True
+            elif not startup_res.get("is_valid"):
+                # Not being a recognized startup is non-fatal unless mandatory
+                eval_res["status"] = "NOT_APPLICABLE" if not is_mand else "FAIL"
+                eval_res["score_awarded"] = weight * 0.5 if not is_mand else 0
+                eval_res["issues"].append(f"Startup India recognition: {startup_res.get('message', 'Not recognized')}")
+                eval_res["explanation"] = f"Startup India recognition not confirmed: {startup_res.get('message')}. DPIIT benefits not applicable."
+                if is_mand:
+                    any_mandatory_failed = True
+            else:
+                eval_res["status"] = "PASS"
+                eval_res["score_awarded"] = weight
+                dipp = startup_res.get("data", {}).get("dipp_recognition_no", "")
+                eval_res["explanation"] = f"PASS: DPIIT Startup India recognition confirmed ({dipp}). Eligible for procurement exemptions."
+
+        # ----------------------------------------------------
+        # --- O. NSIC REGISTRATION (REQ_NSIC) ---
+        # ----------------------------------------------------
+        elif code == "REQ_NSIC":
+            nsic_res = statutory_results["NSIC"]
+            eval_res["evidence"]["statutory_response"] = nsic_res
+            if nsic_res.get("source_mode") == "UNAVAILABLE":
+                eval_res["status"] = "UNAVAILABLE"
+                eval_res["score_awarded"] = weight * 0.5
+                eval_res["explanation"] = "NSIC portal unavailable. Manual SPRS registration verification required."
+                any_needs_review = True
+            elif not nsic_res.get("is_valid"):
+                eval_res["status"] = "NOT_APPLICABLE" if not is_mand else "FAIL"
+                eval_res["score_awarded"] = weight * 0.5 if not is_mand else 0
+                eval_res["issues"].append(f"NSIC SPRS registration: {nsic_res.get('message', 'Not registered')}")
+                eval_res["explanation"] = f"NSIC Single Point Registration Scheme (SPRS) not confirmed: {nsic_res.get('message')}."
+                if is_mand:
+                    any_mandatory_failed = True
+            else:
+                eval_res["status"] = "PASS"
+                eval_res["score_awarded"] = weight
+                scheme = nsic_res.get("data", {}).get("scheme", "SPRS")
+                eval_res["explanation"] = f"PASS: NSIC registration verified under {scheme} scheme. Eligible for EMD/tender fee exemptions."
+
+        # ----------------------------------------------------
+        # --- P. DIGILOCKER DOCUMENT VERIFICATION (REQ_DIGILOCKER) ---
+        # ----------------------------------------------------
+        elif code == "REQ_DIGILOCKER":
+            # Find documents that have a DigiLocker URI in their extracted fields
+            digilocker_docs = [
+                d for d in documents
+                if d.get("fields", {}).get("digilocker_uri") or d.get("fields", {}).get("doc_uri")
+            ]
+            eval_res["evidence"]["digilocker_documents_found"] = len(digilocker_docs)
+            if not digilocker_docs:
+                # Check if any documents themselves carry QR/DigiLocker flags
+                qr_docs = [d for d in documents if d.get("qr_detected")]
+                if qr_docs:
+                    eval_res["status"] = "NEEDS_REVIEW"
+                    eval_res["score_awarded"] = weight * 0.7
+                    eval_res["issues"].append("QR codes detected on documents but DigiLocker URI not extracted. Manual officer scan required.")
+                    eval_res["explanation"] = "QR codes found but DigiLocker URI could not be auto-verified. Officer manual scan recommended."
+                    any_needs_review = True
+                else:
+                    eval_res["status"] = "NEEDS_REVIEW" if not is_mand else "FAIL"
+                    eval_res["score_awarded"] = weight * 0.5 if not is_mand else 0
+                    eval_res["issues"].append("No DigiLocker-linked documents found. Bidder should submit documents via DigiLocker.")
+                    eval_res["explanation"] = "No DigiLocker URI found. Documents submitted conventionally — DigiLocker e-verification not available."
+                    if is_mand:
+                        any_mandatory_failed = True
+                    else:
+                        any_needs_review = True
+            else:
+                # Verify each DigiLocker URI
+                dl_results = []
+                all_valid = True
+                for d in digilocker_docs:
+                    uri = d.get("fields", {}).get("digilocker_uri") or d.get("fields", {}).get("doc_uri")
+                    dl_res = verify_digilocker(uri)
+                    dl_results.append({
+                        "doc_id": d["id"],
+                        "filename": d["original_filename"],
+                        "uri": uri,
+                        "verified": dl_res.get("is_valid"),
+                        "source_mode": dl_res.get("source_mode"),
+                        "message": dl_res.get("message")
+                    })
+                    if not dl_res.get("is_valid") and dl_res.get("source_mode") != "UNAVAILABLE":
+                        all_valid = False
+
+                eval_res["evidence"]["digilocker_verification_results"] = dl_results
+                if all_valid:
+                    eval_res["status"] = "PASS"
+                    eval_res["score_awarded"] = weight
+                    eval_res["explanation"] = f"PASS: {len(digilocker_docs)} document(s) verified via DigiLocker e-signature."
+                else:
+                    failed = [r for r in dl_results if not r["verified"]]
+                    eval_res["status"] = "FAIL" if is_mand else "NEEDS_REVIEW"
+                    eval_res["score_awarded"] = 0 if is_mand else weight * 0.4
+                    eval_res["issues"].append(f"{len(failed)} DigiLocker document(s) failed signature verification.")
+                    eval_res["explanation"] = f"DigiLocker verification failed for {len(failed)} document(s). Invalid or tampered e-signatures."
+                    if is_mand:
+                        any_mandatory_failed = True
+                    else:
+                        any_needs_review = True
+
+        # ----------------------------------------------------
         # --- J. GENERIC / OTHER REQUIREMENTS ---
         # ----------------------------------------------------
         else:
+
             if matching_docs:
                 eval_res["status"] = "PASS"
                 eval_res["score_awarded"] = weight

@@ -1,12 +1,30 @@
 {% extends "base.html" %}
 
-{% block title %}Enterprise Bidder Registration - GeM Compliance{% endblock %}
+{% block title %}Enterprise Bidder Registration - B.I.D.S.E.T.U.{% endblock %}
 
 {% block content %}
 <div class="max-w-2xl mx-auto my-6">
   <div class="bg-white p-8 rounded-xl shadow-sm border border-slate-200">
+    {% if otp_pending %}
+    <div class="mb-6 p-4 rounded-lg border border-blue-200 bg-blue-50">
+      <h1 class="text-lg font-bold text-blue-900">Verify your email address</h1>
+      <p class="text-xs text-blue-800 mt-1">Enter the six-digit OTP sent to your Gmail address. The code expires in 10 minutes.</p>
+    </div>
+    <form action="/register" method="POST" class="space-y-4">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label class="block text-xs font-semibold text-slate-700" for="otp">Email verification OTP</label>
+      <input type="text" id="otp" name="otp" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required autofocus
+             class="w-full px-3 py-2 text-lg tracking-[0.4em] text-center font-mono border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+             placeholder="000000">
+      <button type="submit" class="w-full px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg shadow transition">
+        Verify OTP and Complete Registration
+      </button>
+    </form>
+    {% else %}
     <div class="flex items-center justify-between mb-6 pb-4 border-b border-slate-200">
       <div>
+        <img src="{{ url_for('static', filename='logo.png') }}" alt="B.I.D.S.E.T.U. logo"
+             class="w-14 h-14 object-contain mb-3">
         <h1 class="text-xl font-bold text-slate-900">Bidder Enterprise Registration</h1>
         <p class="text-xs text-slate-500 mt-0.5">Register your company profile to participate in GeM procurement tenders</p>
       </div>
@@ -114,6 +132,7 @@
         </button>
       </div>
     </form>
+    {% endif %}
   </div>
 </div>
 

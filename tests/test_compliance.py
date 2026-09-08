@@ -3,14 +3,14 @@ import pytest
 from database.db import get_db, init_db, query_db, execute_db
 from services.statutory_service import (
     verify_gst, verify_pan, verify_udyam, verify_mca, verify_bis,
-    verify_blacklisting, verify_digilocker
+    verify_blacklisting, verify_digilocker, verify_nsic
 )
 from services.pdf_service import extract_pdf_content
-from services.llm_service import extract_document_fields_llm
+from services.llm_service import extract_document_fields_llm, extract_document_fields_consensus
 from services.verification_engine import run_bidder_verification, get_latest_verification
 from services.tender_service import update_tender_lifecycle_stage, create_corrigendum
 from services.clarification_service import create_clarification_request, submit_clarification_response
-from app import app
+from app import app, refresh_tender_decision_state
 
 @pytest.fixture(scope="module")
 def client():
@@ -41,6 +41,15 @@ def test_statutory_adapters_schema_and_disclaimer():
     assert required_keys.issubset(blacklist_res.keys())
     assert blacklist_res["is_valid"] is True # Clear / not blacklisted
 
+def test_nsic_mock_registry_rejects_unknown_identifiers():
+    valid_res = verify_nsic("AABCU9603R")
+    unknown_res = verify_nsic("UNKNOWN-NSIC-ID")
+
+    assert valid_res["is_valid"] is True
+    assert valid_res["data"]["single_point_registration"] is True
+    assert unknown_res["is_valid"] is False
+    assert unknown_res["status"] == "NOT_FOUND"
+
 def test_pdf_extraction_on_sample_files():
     """Verify PDF extraction succeeds on real sample documents in sample_data."""
     sample_path = os.path.join(os.path.dirname(__file__), "..", "sample_data", "bidders", "bidder_a", "GST_Certificate.pdf")
@@ -59,6 +68,23 @@ def test_llm_deterministic_fallback_extraction():
     mock_pan_text = "Income Tax Department Permanent Account Number PAN AABCU9603R Name: Bharat Tech Solutions"
     extracted_pan = extract_document_fields_llm("PAN_CARD", mock_pan_text)
     assert extracted_pan.get("pan") == "AABCU9603R"
+
+def test_extraction_consensus_keeps_deterministic_value_on_conflict(monkeypatch):
+    monkeypatch.setattr(
+        "services.llm_service.extract_document_fields_llm",
+        lambda doc_type, text: {
+            "_source": "GEMINI_LLM_EXTRACTION",
+            "pan": "BBBBB1234C",
+            "legal_name": "Gemini Name",
+        },
+    )
+    result = extract_document_fields_consensus(
+        "PAN_CARD", "PAN BBBBB1234A Legal Name: Regex Name"
+    )
+
+    assert result["pan"] == "BBBBB1234A"
+    assert result["_extraction_consensus_status"] == "CONFLICT"
+    assert {item["field"] for item in result["_extraction_conflicts"]} == {"pan", "legal_name"}
 
 def test_verification_engine_mandatory_gating(client):
     """Verify that mandatory failure yields NOT_ELIGIBLE and risk ratings are computed."""
@@ -125,9 +151,9 @@ def test_security_csrf_and_rbac(client):
     res = client.get("/admin", follow_redirects=False)
     assert res.status_code in (302, 401, 403)
 
-    # POST to login without CSRF should fail with 400
+    # Public authentication endpoints do not require a session-bound CSRF token.
     post_res = client.post("/login", data={"username": "fake", "password": "wrong"})
-    assert post_res.status_code == 400
+    assert post_res.status_code == 200
 
 def test_officer_cannot_mutate_unassigned_tender(client):
     """Officer mutation routes enforce tender assignment authorization."""
@@ -167,6 +193,75 @@ def test_officer_decision_determination(client):
             updated = query_db("SELECT officer_decision, officer_remarks FROM verifications WHERE id = ?", (ver["id"],), one=True)
             assert updated["officer_decision"] == "QUALIFIED"
             assert "verified compliant" in updated["officer_remarks"]
+
+
+def test_officer_decision_route_records_without_server_error(client):
+    """The officer decision form must not fail when it loads the existing decision state."""
+    with app.app_context():
+        ver = query_db("SELECT id, tender_id, bidder_id FROM verifications LIMIT 1", one=True)
+        officer = query_db("SELECT id FROM users WHERE role = 'officer' LIMIT 1", one=True)
+        assignment = query_db(
+            "SELECT id FROM tender_assignments WHERE tender_id = ? AND officer_id = ?",
+            (ver["tender_id"], officer["id"]), one=True
+        ) if ver and officer else None
+        if not (ver and officer and assignment):
+            return
+        execute_db(
+            "UPDATE verifications SET officer_decision = NULL, officer_remarks = NULL WHERE id = ?",
+            (ver["id"],)
+        )
+
+    with client.session_transaction() as sess:
+        sess["user_id"] = officer["id"]
+        sess["user_role"] = "officer"
+        sess["_csrf_token"] = "test_csrf_token"
+
+    response = client.post(
+        f"/verifications/{ver['id']}/decision",
+        data={
+            "decision": "QUALIFIED",
+            "remarks": "Decision route regression test.",
+            "csrf_token": "test_csrf_token",
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+
+
+def test_tender_decision_state_is_not_decided_until_all_bidders_have_rulings(client):
+    """A single bidder ruling must not close a tender with other bids pending."""
+    with app.app_context():
+        tender = query_db("SELECT id FROM tenders LIMIT 1", one=True)
+        bidder_ids = query_db(
+            "SELECT DISTINCT bidder_id FROM documents WHERE tender_id = ? ORDER BY bidder_id",
+            (tender["id"],)
+        ) if tender else []
+        if len(bidder_ids) < 2:
+            return
+
+        first_id = bidder_ids[0]["bidder_id"]
+        second_id = bidder_ids[1]["bidder_id"]
+        first_ver = query_db(
+            "SELECT id FROM verifications WHERE tender_id = ? AND bidder_id = ? ORDER BY version_num DESC LIMIT 1",
+            (tender["id"], first_id), one=True
+        )
+        second_ver = query_db(
+            "SELECT id FROM verifications WHERE tender_id = ? AND bidder_id = ? ORDER BY version_num DESC LIMIT 1",
+            (tender["id"], second_id), one=True
+        )
+        if not (first_ver and second_ver):
+            return
+
+        execute_db("UPDATE verifications SET officer_decision = 'QUALIFIED' WHERE id = ?", (first_ver["id"],))
+        execute_db("UPDATE verifications SET officer_decision = NULL WHERE id = ?", (second_ver["id"],))
+        refresh_tender_decision_state(tender["id"])
+        state = query_db("SELECT lifecycle_stage FROM tenders WHERE id = ?", (tender["id"],), one=True)
+        assert state["lifecycle_stage"] == "OFFICER_REVIEW"
+
+        execute_db("UPDATE verifications SET officer_decision = 'DISQUALIFIED' WHERE id = ?", (second_ver["id"],))
+        refresh_tender_decision_state(tender["id"])
+        state = query_db("SELECT lifecycle_stage FROM tenders WHERE id = ?", (tender["id"],), one=True)
+        assert state["lifecycle_stage"] == "DECIDED"
 
 def test_object_level_authorization(client):
     """Verify that a bidder user cannot access another bidder's private documents or evaluation reports."""

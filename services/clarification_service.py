@@ -32,6 +32,17 @@ def submit_clarification_response(clarification_id, bidder_id, response_text, up
     )
     if not clar:
         raise ValueError("Clarification request not found or not owned by bidder.")
+    if clar["status"] != "PENDING":
+        raise ValueError("This clarification is no longer pending.")
+    if clar["deadline"]:
+        try:
+            deadline = datetime.strptime(clar["deadline"], "%Y-%m-%d %H:%M")
+            if datetime.utcnow() > deadline:
+                raise ValueError("The clarification response deadline has passed.")
+        except ValueError:
+            raise
+        except (TypeError, OverflowError):
+            raise ValueError("Clarification deadline is invalid.")
 
     # 1. Process supplementary documents if provided
     if uploaded_files:

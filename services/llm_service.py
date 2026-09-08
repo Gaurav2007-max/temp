@@ -73,6 +73,45 @@ Document text:
     # Deterministic fallback extraction
     return extract_document_fields_deterministic(doc_type, text)
 
+def _normalized_field_value(value):
+    if isinstance(value, (int, float)):
+        return round(float(value), 4)
+    return re.sub(r"\s+", " ", str(value).strip()).casefold()
+
+def extract_document_fields_consensus(doc_type, text):
+    """Compare deterministic and Gemini extraction without allowing silent overrides."""
+    deterministic = extract_document_fields_deterministic(doc_type, text)
+    llm_fields = extract_document_fields_llm(doc_type, text)
+    gemini_used = llm_fields.get("_source") == "GEMINI_LLM_EXTRACTION"
+
+    if not gemini_used:
+        deterministic["_extraction_consensus_status"] = "DETERMINISTIC_ONLY"
+        deterministic["_extraction_conflicts"] = []
+        return deterministic
+
+    conflicts = []
+    merged = dict(deterministic)
+    for field, gemini_value in llm_fields.items():
+        if field.startswith("_") or gemini_value is None or gemini_value == "":
+            continue
+        deterministic_value = deterministic.get(field)
+        if deterministic_value is None or deterministic_value == "":
+            merged[field] = gemini_value
+            continue
+        if _normalized_field_value(deterministic_value) != _normalized_field_value(gemini_value):
+            conflicts.append({
+                "field": field,
+                "deterministic_value": deterministic_value,
+                "gemini_value": gemini_value,
+                "resolution": "DETERMINISTIC_VALUE_RETAINED"
+            })
+
+    merged["_source"] = "CONSENSUS_DETERMINISTIC_WITH_GEMINI"
+    merged["_gemini_fields"] = {k: v for k, v in llm_fields.items() if not k.startswith("_")}
+    merged["_extraction_conflicts"] = conflicts
+    merged["_extraction_consensus_status"] = "CONFLICT" if conflicts else "AGREED"
+    return merged
+
 def extract_document_fields_deterministic(doc_type, text):
     """
     Reliable deterministic regex-based field extractor from document text.
@@ -297,3 +336,137 @@ Tender pages:
         return validated
     except Exception:
         return []
+
+
+def analyze_document_bundle_llm(bidder_name, documents_summary):
+    """
+    Analyzes a bidder's complete document bundle for cross-document inconsistencies,
+    missing information, and suspicious patterns using Gemini LLM if available.
+    Falls back to deterministic rule-based analysis if LLM is unavailable.
+
+    documents_summary: list of dicts with keys: doc_type, original_filename, extracted_fields (dict)
+    Returns: dict with keys: inconsistencies (list), missing_fields (list), risk_flags (list), summary (str)
+    """
+    if not documents_summary:
+        return {
+            "inconsistencies": [],
+            "missing_fields": [],
+            "risk_flags": ["No documents submitted for bundle analysis"],
+            "summary": "No documents found in submission for cross-document analysis.",
+            "source": "NO_DOCUMENTS"
+        }
+
+    client = get_gemini_client()
+    if client and is_llm_configured():
+        # Build a compact summary for the LLM
+        doc_entries = []
+        for d in documents_summary:
+            fields = d.get("extracted_fields") or {}
+            entry = {
+                "doc_type": d.get("doc_type", "UNKNOWN"),
+                "filename": d.get("original_filename", ""),
+                "key_fields": {k: v for k, v in fields.items() if not k.startswith("_") and v is not None}
+            }
+            doc_entries.append(entry)
+
+        prompt = f"""You are a GeM procurement compliance AI assistant.
+Analyze the following document bundle submitted by bidder '{bidder_name}' and identify:
+1. Cross-document inconsistencies (e.g., different PAN/GSTIN/company names across documents)
+2. Missing mandatory fields in documents
+3. Risk flags (e.g., expired documents, suspicious values, mismatched entities)
+
+Return ONLY a strict valid JSON object with this exact schema:
+{{
+  "inconsistencies": ["string description of each inconsistency found"],
+  "missing_fields": ["field_name: explanation for each missing critical field"],
+  "risk_flags": ["risk description for each flag"],
+  "summary": "2-sentence plain-language summary of the bundle quality"
+}}
+
+Do NOT output markdown. Output ONLY raw JSON.
+
+Document bundle:
+{json.dumps(doc_entries, indent=2)[:6000]}
+"""
+        try:
+            response = client.models.generate_content(
+                model=os.environ.get("GEMINI_MODEL", "gemini-2.0-flash"),
+                contents=prompt
+            )
+            raw_text = re.sub(r"^```json\s*|```$", "", response.text.strip(), flags=re.IGNORECASE).strip()
+            result = json.loads(raw_text)
+            if isinstance(result, dict):
+                result["source"] = "GEMINI_LLM_ANALYSIS"
+                return result
+        except Exception:
+            pass
+
+    # Deterministic fallback: rule-based cross-document consistency checks
+    inconsistencies = []
+    missing_fields = []
+    risk_flags = []
+
+    # Collect all PANs, GSTINs, company names across docs
+    seen_pans = {}
+    seen_gstins = {}
+    seen_names = {}
+
+    for d in documents_summary:
+        fields = d.get("extracted_fields") or {}
+        fname = d.get("original_filename", d.get("doc_type", "doc"))
+        pan = (fields.get("pan") or "").upper().strip()
+        gstin = (fields.get("gstin") or "").upper().strip()
+        name = (fields.get("legal_name") or fields.get("enterprise_name") or "").strip()
+
+        if pan:
+            if pan not in seen_pans:
+                seen_pans[pan] = fname
+            else:
+                pass  # Same PAN — good
+
+        if gstin:
+            if gstin not in seen_gstins:
+                seen_gstins[gstin] = fname
+            else:
+                pass
+
+        if name:
+            if name not in seen_names:
+                seen_names[name] = fname
+
+    # Check PAN consistency
+    if len(seen_pans) > 1:
+        pans_list = ", ".join(f"'{p}' (in {f})" for p, f in seen_pans.items())
+        inconsistencies.append(f"Multiple PAN numbers found across documents: {pans_list}")
+        risk_flags.append("PAN mismatch across submitted documents — possible impersonation or clerical error")
+
+    # Check GSTIN consistency
+    if len(seen_gstins) > 1:
+        gstins_list = ", ".join(f"'{g}' (in {f})" for g, f in seen_gstins.items())
+        inconsistencies.append(f"Multiple GSTINs found across documents: {gstins_list}")
+        risk_flags.append("GSTIN mismatch across submitted documents")
+
+    # Check entity name consistency
+    if len(seen_names) > 2:
+        risk_flags.append(f"Multiple entity names ({len(seen_names)}) detected across documents — verify legal entity consistency")
+
+    # Check for missing critical document types
+    doc_types_present = {d.get("doc_type") for d in documents_summary}
+    if "ITR" not in doc_types_present and "BALANCE_SHEET" not in doc_types_present:
+        missing_fields.append("Financial Year ITR/Balance Sheet: No audited financial statements found")
+    if "GST_CERTIFICATE" not in doc_types_present:
+        missing_fields.append("GST Certificate: GST registration certificate not found in submission")
+
+    summary = (
+        f"Bundle analysis for {bidder_name}: {len(documents_summary)} document(s) reviewed. "
+        f"Found {len(inconsistencies)} inconsistency(ies), {len(missing_fields)} missing field(s), "
+        f"{len(risk_flags)} risk flag(s)."
+    )
+
+    return {
+        "inconsistencies": inconsistencies,
+        "missing_fields": missing_fields,
+        "risk_flags": risk_flags,
+        "summary": summary,
+        "source": "DETERMINISTIC_ANALYSIS"
+    }

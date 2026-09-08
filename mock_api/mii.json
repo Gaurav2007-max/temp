@@ -1,0 +1,50 @@
+{
+  "records": [
+    {
+      "pan": "AABCU9603R",
+      "gstin": "07AABCU9603R1ZM",
+      "company_name": "Bharat Tech Solutions Private Limited",
+      "dpiit_registration_no": "DPIIT-MII-DL-2024-001234",
+      "category": "Class-I Local Supplier",
+      "local_content_percentage": 65.0,
+      "product_category": "Electronics & IT Hardware",
+      "registration_status": "Active",
+      "valid_until": "2027-03-31",
+      "registered_on": "2024-04-01",
+      "verification_mode": "Self-Certified + Third-Party Audit"
+    },
+    {
+      "pan": "AAACP1234A",
+      "gstin": "27AAACP1234A1Z5",
+      "company_name": "Precision Components India LLP",
+      "dpiit_registration_no": "DPIIT-MII-MH-2024-007891",
+      "category": "Class-II Local Supplier",
+      "local_content_percentage": 52.0,
+      "product_category": "Mechanical Components",
+      "registration_status": "Active",
+      "valid_until": "2026-12-31",
+      "registered_on": "2023-01-15",
+      "verification_mode": "Self-Certified"
+    },
+    {
+      "pan": "AADCS1234B",
+      "gstin": "29AADCS1234B1Z8",
+      "company_name": "South India Digital Services",
+      "dpiit_registration_no": "DPIIT-MII-KA-2025-003456",
+      "category": "Class-I Local Supplier",
+      "local_content_percentage": 72.0,
+      "product_category": "Software & Digital Services",
+      "registration_status": "Active",
+      "valid_until": "2028-03-31",
+      "registered_on": "2025-04-01",
+      "verification_mode": "Third-Party Audit"
+    }
+  ],
+  "not_registered": [
+    {
+      "pan": "AABCW7788D",
+      "note": "No MII registration found. Self-declaration required."
+    }
+  ]
+}
+

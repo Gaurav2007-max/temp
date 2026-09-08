@@ -569,11 +569,23 @@ def verify_nsic(reg_no_or_pan):
             )
 
     # MOCK mode
+    fixture = _load_mock_fixture("startup.json")
+    if fixture and "nsic" in fixture:
+        for rec in fixture["nsic"]:
+            if rec.get("nsic_reg", "").upper() == clean_id or rec.get("pan", "").upper() == clean_id:
+                is_valid = rec.get("status", "").lower() == "valid"
+                return _make_response(
+                    "MOCK", "MOCK_ADAPTER", "REGISTERED" if is_valid else "EXPIRED", is_valid,
+                    f"NSIC registration for {clean_id}: {rec.get('status')}",
+                    "MOCK DATA — NOT LIVE GOVERNMENT VERIFICATION",
+                    data=rec
+                )
+
     return _make_response(
-        "MOCK", "MOCK_ADAPTER", "REGISTERED", True,
-        f"NSIC registration verified under Single Point Registration Scheme for {clean_id}.",
+        "MOCK", "MOCK_ADAPTER", "NOT_FOUND", False,
+        f"NSIC registration {clean_id} not found in mock database.",
         "MOCK DATA — NOT LIVE GOVERNMENT VERIFICATION",
-        data={"registration_no": clean_id, "scheme": "SPRS"}
+        data={"registration_no": clean_id}
     )
 
 # -------------------------------------------------------------------------
@@ -829,3 +841,156 @@ def fetch_gem_bid(gem_bid_id):
         f"GeM Bid {clean_id} not found in mock database.",
         "MOCK DATA — NOT LIVE GOVERNMENT VERIFICATION"
     )
+
+# -------------------------------------------------------------------------
+# 13. DPIIT Make in India (MII) Adapter
+# -------------------------------------------------------------------------
+def verify_mii(pan_or_gstin):
+    """
+    Verifies Make in India (MII) registration with DPIIT.
+    Returns classification (Class-I / Class-II / Non-MII), local content %, and registration status.
+    Supports MOCK (fixture), OFFICIAL (API), and UNAVAILABLE modes.
+    Falls back to MOCK automatically if no real API key is configured.
+    """
+    mode = _handle_mode("MII_MODE", default_mode="MOCK")
+    clean_id = (pan_or_gstin or "").upper().strip()
+
+    if mode == "UNAVAILABLE":
+        return _make_response(
+            "UNAVAILABLE", "DPIIT_MII_PORTAL", "UNAVAILABLE", None,
+            "DPIIT Make in India portal unavailable. Manual verification required.",
+            "UNAVAILABLE STATE — NOT TREATED AS INVALID",
+            identifier=clean_id
+        )
+
+    if mode == "OFFICIAL":
+        api_key = os.environ.get("MII_API_KEY")
+        api_url = os.environ.get("MII_API_URL", "").strip()
+        if not api_key or not api_url:
+            return _make_response(
+                "UNAVAILABLE", "OFFICIAL_DPIIT_MII", "UNAVAILABLE", None,
+                "Official DPIIT MII API credentials absent. Officer verification required.",
+                "OFFICIAL CREDENTIALS ABSENT — UNAVAILABLE STATE (NOT MOCK)",
+                identifier=clean_id
+            )
+        target_url = f"{api_url.rstrip('/')}/{clean_id}"
+        ok, code, data, err = _execute_official_http_get("DPIIT_MII", target_url, api_key)
+        if ok and isinstance(data, dict):
+            is_active = str(data.get("registration_status", "")).lower() == "active"
+            category = data.get("category", "Unknown")
+            lc_pct = data.get("local_content_percentage", 0)
+            return _make_response(
+                "OFFICIAL", "OFFICIAL_DPIIT_MII", "ACTIVE" if is_active else "INACTIVE", is_active,
+                f"Official DPIIT MII record: {category} with {lc_pct}% local content.",
+                "OFFICIAL LIVE GOVERNMENT VERIFICATION (DPIIT MII)",
+                data=data,
+                category=category,
+                local_content_percentage=lc_pct,
+                dpiit_registration_no=data.get("dpiit_registration_no")
+            )
+        else:
+            # API is reachable but returned an error — surface the error details
+            error_detail = err or f"HTTP Status {code}"
+            return _make_response(
+                "UNAVAILABLE", "OFFICIAL_DPIIT_MII", "API_ERROR", None,
+                f"DPIIT MII API call failed: {error_detail}. Falling back to MOCK data.",
+                f"OFFICIAL API ERROR — {error_detail}",
+                identifier=clean_id,
+                api_error=error_detail,
+                api_error_code=code
+            )
+
+    # MOCK mode (default when no real credentials)
+    fixture = _load_mock_fixture("mii.json")
+    if fixture:
+        for rec in fixture.get("records", []):
+            pan_match = clean_id and rec.get("pan", "").upper() == clean_id
+            gstin_match = clean_id and rec.get("gstin", "").upper() == clean_id
+            if pan_match or gstin_match:
+                is_active = rec.get("registration_status", "").lower() == "active"
+                category = rec.get("category", "Unknown")
+                lc_pct = float(rec.get("local_content_percentage", 0))
+                return _make_response(
+                    "MOCK", "MOCK_ADAPTER", "ACTIVE" if is_active else "INACTIVE", is_active,
+                    f"DPIIT MII: {rec.get('company_name')} registered as {category} with {lc_pct}% local content.",
+                    "MOCK DATA — NOT LIVE GOVERNMENT VERIFICATION",
+                    data=rec,
+                    category=category,
+                    local_content_percentage=lc_pct,
+                    dpiit_registration_no=rec.get("dpiit_registration_no")
+                )
+        # Check not_registered list
+        for rec in fixture.get("not_registered", []):
+            if clean_id and rec.get("pan", "").upper() == clean_id:
+                return _make_response(
+                    "MOCK", "MOCK_ADAPTER", "NOT_REGISTERED", False,
+                    f"No DPIIT MII registration found for {clean_id}. Self-declaration may be required.",
+                    "MOCK DATA — NOT LIVE GOVERNMENT VERIFICATION",
+                    data=rec,
+                    category="Not Registered",
+                    local_content_percentage=0
+                )
+    return _make_response(
+        "MOCK", "MOCK_ADAPTER", "NOT_FOUND", None,
+        f"MII registration for {clean_id} not found in mock database. Manual officer verification required.",
+        "MOCK DATA — NOT LIVE GOVERNMENT VERIFICATION",
+        identifier=clean_id,
+        category="Unknown",
+        local_content_percentage=None
+    )
+
+
+# -------------------------------------------------------------------------
+# Admin Diagnostic: Ping / Health-check an adapter for error surfacing
+# -------------------------------------------------------------------------
+def ping_adapter(adapter_name, identifier="TEST"):
+    """
+    Runs a live diagnostic probe on the named adapter.
+    Returns full response including any API errors — intended for admin error surfacing.
+    """
+    name = (adapter_name or "").upper().strip()
+    clean_id = (identifier or "TEST").strip()
+    try:
+        if name == "GST":
+            return verify_gst(clean_id)
+        elif name == "PAN":
+            return verify_pan(clean_id)
+        elif name == "UDYAM":
+            return verify_udyam(clean_id)
+        elif name == "MCA":
+            return verify_mca(clean_id)
+        elif name == "EPFO":
+            return verify_epfo(clean_id)
+        elif name == "ESIC":
+            return verify_esic(clean_id)
+        elif name == "STARTUP":
+            return verify_startup(clean_id)
+        elif name == "NSIC":
+            return verify_nsic(clean_id)
+        elif name == "BIS":
+            return verify_bis(clean_id)
+        elif name == "BLACKLIST":
+            return verify_blacklisting(pan=clean_id, gstin=clean_id)
+        elif name == "DIGILOCKER":
+            return verify_digilocker(clean_id)
+        elif name == "GEM":
+            return fetch_gem_bid(clean_id)
+        elif name == "MII":
+            return verify_mii(clean_id)
+        else:
+            return {
+                "source_mode": "ERROR",
+                "status": "UNKNOWN_ADAPTER",
+                "message": f"No adapter registered for name '{name}'.",
+                "is_valid": None,
+                "adapter_name": name
+            }
+    except Exception as exc:
+        return {
+            "source_mode": "ERROR",
+            "status": "EXCEPTION",
+            "message": f"Adapter '{name}' raised an unhandled exception: {str(exc)}",
+            "is_valid": None,
+            "adapter_name": name,
+            "exception": str(exc)
+        }

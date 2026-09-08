@@ -1,13 +1,13 @@
 {% extends "base.html" %}
 
-{% block title %}Statutory API Adapters Status - GeM Compliance{% endblock %}
+{% block title %}Statutory API Adapters Status - B.I.D.S.E.T.U.{% endblock %}
 
 {% block content %}
 <div class="space-y-6 max-w-6xl mx-auto">
   <div class="flex items-center justify-between pb-4 border-b border-slate-200">
     <div>
-      <h1 class="text-xl font-bold text-slate-900">Statutory API Adapters & Verification Integrations</h1>
-      <p class="text-xs text-slate-500 mt-0.5">Transparent integration status for authoritative Indian public registries</p>
+      <h1 class="text-xl font-bold text-slate-900">Statutory API Adapters &amp; Verification Integrations</h1>
+      <p class="text-xs text-slate-500 mt-0.5">Transparent integration status for all Indian public registries. Mock data is used automatically when real API is not configured.</p>
     </div>
     <a href="/admin" class="text-xs text-blue-600 hover:underline font-semibold">&larr; Back to Dashboard</a>
   </div>
@@ -19,47 +19,68 @@
       Statutory Integration Compliance Policy
     </div>
     <p>
-      In adherence to GeM security directives, this platform does NOT simulate or fake live government APIs. Adapters configured in <strong class="font-mono">MOCK</strong> mode utilize verified local fixtures with explicit disclaimers. In production deployments lacking direct departmental credentials, adapters return an explicit <strong class="font-mono">UNAVAILABLE</strong> contract rather than erroneously failing or blacklisting compliant bidders.
+      Adapters in <strong class="font-mono">MOCK</strong> mode use verified local fixtures.
+      When a real API key is present but the API returns an error, the error is surfaced here to admin
+      and the platform continues using MOCK data so compliant bidders are never wrongly rejected.
+      Set <code class="bg-amber-100 px-1 rounded font-mono">GST_API_KEY</code>, <code class="bg-amber-100 px-1 rounded font-mono">GST_API_URL</code>, <code class="bg-amber-100 px-1 rounded font-mono">GST_MODE=OFFICIAL</code> etc. in your <code class="bg-amber-100 px-1 rounded font-mono">.env</code> to enable live government verification.
     </p>
   </div>
 
   <!-- Adapters Table -->
   <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-    <div class="px-6 py-4 border-b border-slate-200">
+    <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
       <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wider">Configured Statutory Adapters</h2>
+      <span class="text-xs text-slate-500 font-mono">{{ adapters | length }} adapters registered</span>
     </div>
     <div class="overflow-x-auto">
       <table class="w-full text-left text-xs text-slate-600">
         <thead class="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200">
           <tr>
-            <th class="px-6 py-3">Public Authority / System</th>
-            <th class="px-6 py-3">Configured Mode</th>
-            <th class="px-6 py-3">Contract Status</th>
-            <th class="px-6 py-3">Integration Disclaimer</th>
+            <th class="px-5 py-3">Public Authority / System</th>
+            <th class="px-5 py-3">Mode</th>
+            <th class="px-5 py-3">Env Variable</th>
+            <th class="px-5 py-3">Contract Status</th>
+            <th class="px-5 py-3">Disclaimer</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-200">
           {% for a in adapters %}
             <tr class="hover:bg-slate-50 transition">
-              <td class="px-6 py-4 font-semibold text-slate-900">
+              <td class="px-5 py-3.5 font-semibold text-slate-900">
                 <div>{{ a.name }}</div>
-                <div class="text-[11px] text-slate-400">{{ a.description }}</div>
+                <div class="text-[11px] text-slate-400 font-normal mt-0.5">{{ a.description }}</div>
               </td>
-              <td class="px-6 py-4">
+              <td class="px-5 py-3.5">
                 <span class="px-2 py-0.5 rounded font-mono font-bold text-[11px]
                   {% if a.mode == 'MOCK' %}bg-blue-50 text-blue-700 border border-blue-200
                   {% elif a.mode == 'OFFICIAL' %}bg-emerald-50 text-emerald-700 border border-emerald-200
+                  {% elif a.mode == 'UNAVAILABLE' %}bg-rose-50 text-rose-700 border border-rose-200
                   {% else %}bg-slate-100 text-slate-600 border border-slate-200{% endif %}">
                   {{ a.mode }}
                 </span>
               </td>
-              <td class="px-6 py-4">
-                <span class="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700">
-                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                  Normalized Contract Active
-                </span>
+              <td class="px-5 py-3.5">
+                <code class="text-[11px] font-mono text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">{{ a.env_key }}</code>
               </td>
-              <td class="px-6 py-4 font-mono text-[11px] text-slate-500">
+              <td class="px-5 py-3.5">
+                {% if a.mode == 'OFFICIAL' %}
+                  <span class="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                    Live Government API
+                  </span>
+                {% elif a.mode == 'UNAVAILABLE' %}
+                  <span class="inline-flex items-center gap-1.5 text-[11px] font-semibold text-rose-700">
+                    <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                    Unavailable — Manual Check Required
+                  </span>
+                {% else %}
+                  <span class="inline-flex items-center gap-1.5 text-[11px] font-semibold text-blue-700">
+                    <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                    Mock Fixture Active
+                  </span>
+                {% endif %}
+              </td>
+              <td class="px-5 py-3.5 font-mono text-[11px] text-slate-500">
                 {{ a.disclaimer }}
               </td>
             </tr>
@@ -69,10 +90,13 @@
     </div>
   </div>
 
-  <!-- Test Adapter Interactive Verification Tool -->
+  <!-- Interactive Adapter Diagnostic -->
   <div class="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
-    <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wider mb-2">Interactive Adapter Diagnostic Query</h2>
-    <p class="text-xs text-slate-500 mb-4">Query any statutory adapter directly to verify normalized response schema contract</p>
+    <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wider mb-1">Interactive Adapter Diagnostic Query</h2>
+    <p class="text-xs text-slate-500 mb-4">
+      Query any adapter directly. If API is configured but broken, this tool shows the error details prominently.
+      When no real API is configured, MOCK data is automatically used.
+    </p>
 
     <form action="/api/test-adapter" method="POST" class="grid grid-cols-1 sm:grid-cols-3 gap-4">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -83,8 +107,15 @@
           <option value="PAN">Income Tax Department (PAN)</option>
           <option value="UDYAM">Udyam MSME Registry</option>
           <option value="MCA">Ministry of Corporate Affairs</option>
-          <option value="BLACKLIST">CVC / GeM Debarment</option>
+          <option value="EPFO">EPFO Compliance</option>
+          <option value="ESIC">ESIC Compliance</option>
+          <option value="STARTUP">Startup India / DPIIT</option>
+          <option value="NSIC">NSIC SPRS Registration</option>
           <option value="BIS">Bureau of Indian Standards</option>
+          <option value="BLACKLIST">CVC / GeM Debarment</option>
+          <option value="DIGILOCKER">DigiLocker Verification</option>
+          <option value="MII">DPIIT Make in India (MII)</option>
+          <option value="GEM">GeM Bid API</option>
         </select>
       </div>
       <div>
@@ -101,9 +132,35 @@
     </form>
 
     {% if test_result %}
-      <div class="mt-6 pt-6 border-t border-slate-200">
-        <h3 class="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">Normalized Adapter Response:</h3>
-        <pre class="bg-slate-900 text-emerald-400 p-4 rounded-lg font-mono text-xs overflow-x-auto">{{ test_result | tojson(indent=2) }}</pre>
+      <div class="mt-6 pt-6 border-t border-slate-200 space-y-4">
+
+        <!-- Admin Alert Banner — shows prominently if API is broken or erroring -->
+        {% if test_result._admin_alert %}
+          <div class="flex items-start gap-3 p-4 rounded-lg border
+            {% if test_result._admin_alert in ('ERROR', 'API_ERROR') %}bg-rose-50 border-rose-200 text-rose-800
+            {% elif test_result._admin_alert == 'UNAVAILABLE' %}bg-amber-50 border-amber-200 text-amber-800
+            {% else %}bg-blue-50 border-blue-200 text-blue-800{% endif %}">
+            {% if test_result._admin_alert in ('ERROR', 'API_ERROR') %}
+              <svg class="w-5 h-5 text-rose-500 shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/></svg>
+            {% elif test_result._admin_alert == 'UNAVAILABLE' %}
+              <svg class="w-5 h-5 text-amber-500 shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
+            {% else %}
+              <svg class="w-5 h-5 text-blue-500 shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/></svg>
+            {% endif %}
+            <div>
+              <div class="font-bold text-sm mb-0.5">
+                {% if test_result._admin_alert == 'ERROR' %}Adapter Error — Check Configuration
+                {% elif test_result._admin_alert == 'API_ERROR' %}Real API Returned an Error — Review Credentials / Endpoint
+                {% elif test_result._admin_alert == 'UNAVAILABLE' %}API Unavailable — MOCK Fallback Active
+                {% else %}Running in MOCK Mode — Set Real API Credentials to Enable Live Verification{% endif %}
+              </div>
+              <div class="text-xs opacity-90">{{ test_result._admin_message }}</div>
+            </div>
+          </div>
+        {% endif %}
+
+        <h3 class="text-xs font-bold text-slate-800 uppercase tracking-wider">Full Normalized Adapter Response:</h3>
+        <pre class="bg-slate-900 text-emerald-400 p-4 rounded-lg font-mono text-xs overflow-x-auto whitespace-pre-wrap">{{ test_result | tojson(indent=2) }}</pre>
       </div>
     {% endif %}
   </div>
